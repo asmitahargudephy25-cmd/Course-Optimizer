@@ -1,7 +1,10 @@
-courses_list = ["math", "cs", "physics", "calc1", "calc2"]
+import pandas as pd
+df = pd.read_csv("course_catalog.csv")
+courses_list = list(df["course_name"])
 semesters_list = [1,2,3,4,5,6,7,8]
-reqcourses_list = ["calc1", "calc2"]
-credits_list = []
+reqcourses_list = list(df[df['required_course'] == "YES"]["course_name"])
+credits_list = list(df["credits"])
+
 from ortools.sat.python import cp_model 
 
 #building model

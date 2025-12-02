@@ -1,7 +1,7 @@
-course_name,lecture,tutorial,practical,total,credits,prerequisites
-MA101,3,3,0,6,5,NONE
-CS0101,3,1,2,6,5,NONE
-PHY102,3,1,2,6,5,NONE
-ME104,1,0,3,4,3,NONE
-ME106,0,0,2,2,1,NONE
-MA102,3,3,0,6,5,MA101
+course_name,lecture,tutorial,practical,total,credits,prerequisites,required_course
+MA101,3,3,0,6,5,NONE,YES
+CS0101,3,1,2,6,5,NONE,YES
+PHY102,3,1,2,6,5,NONE,YES
+ME104,1,0,3,4,3,NONE,NO
+ME106,0,0,2,2,1,NONE,NO
+MA102,3,3,0,6,5,MA101,YES
