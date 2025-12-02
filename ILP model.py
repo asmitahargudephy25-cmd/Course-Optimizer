@@ -1,5 +1,7 @@
 courses_list = ["math", "cs", "physics", "calc1", "calc2"]
 semesters_list = [1,2,3,4,5,6,7,8]
+reqcourses_list = ["calc1", "calc2"]
+credits_list = []
 from ortools.sat.python import cp_model 
 
 #building model
@@ -14,6 +16,14 @@ for c in courses_list:
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:
     model.add(sum(x[('c','s')] for s in semesters_list) <= 1)
+
+#Hard Constraint 2(required courses must be taken exactly once)
+for courses in reqcourses_list:
+    model.add(sum(x[('c','s')] for s in semesters_list) == 1)
+
+#Hard Constraint 3(credit limits)
+
+
    
                   
 
