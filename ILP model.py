@@ -3,7 +3,8 @@ df = pd.read_csv("course_catalog.csv")
 courses_list = list(df["course_name"])
 semesters_list = [1,2,3,4,5,6,7,8]
 reqcourses_list = list(df[df['required_course'] == "YES"]["course_name"])
-credits_list = list(df["credits"])
+credits_dict = df.set_index("course_name")["credits"].to_dict()
+print(df.set_index("course_name")["credits"].to_dict())
 
 from ortools.sat.python import cp_model 
 
