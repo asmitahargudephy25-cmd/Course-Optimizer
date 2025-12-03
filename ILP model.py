@@ -4,7 +4,9 @@ courses_list = list(df["course_name"])
 semesters_list = [1,2,3,4,5,6,7,8]
 reqcourses_list = list(df[df['required_course'] == "YES"]["course_name"])
 credits_dict = df.set_index("course_name")["credits"].to_dict()
-print(df.set_index("course_name")["credits"].to_dict())
+
+max_credits = int(input("Enter max credits:"))
+min_credits = int(input("Enter min credits:"))
 
 from ortools.sat.python import cp_model 
 
@@ -26,7 +28,12 @@ for courses in reqcourses_list:
     model.add(sum(x[('c','s')] for s in semesters_list) == 1)
 
 #Hard Constraint 3(credit limits)
+for s in semesters_list:
+    model.add(sum(x[('c','s')]*credits_dict[c] for c in courses_list) <= max_credits)
+for s in semesters_list:
+    model.add(sum(x[('c','s')]*credits_dict[c] for c in courses_list) >= min_credits)
 
+#Hard Constraint 4
 
    
                   
