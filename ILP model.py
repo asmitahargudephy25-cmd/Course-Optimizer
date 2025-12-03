@@ -35,10 +35,18 @@ for s in semesters_list:
 
 #Hard Constraint 4
 
-   
-                  
+
+#solver
+solver = cp_model.CpSolver()
+result = solver.Solve(model)
 
 
-
-
-
+#output
+if result in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    print("Optimal Schedule:")
+    for s in semesters_list:
+        taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
+        if taken:
+            print(f"Semester {s+1}: {taken}")
+else:
+    print("No feasible schedule found.")
