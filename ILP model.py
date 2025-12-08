@@ -33,7 +33,7 @@ for s in semesters_list:
 for s in semesters_list:
     model.add(sum(x[(c,s)]*credits_dict[c] for c in courses_list) >= min_credits)
 
-#Hard Constraint 4
+#Hard Constraint 4(prerequisites)
 new_df = df[df["prerequisites"] != "NONE"]
 prereq_dict = new_df.set_index("course_name")["prerequisites"].to_dict()
 for k in prereq_dict:
