@@ -17,23 +17,32 @@ model = cp_model.CpModel()
 x = {}
 for c in courses_list:
     for s in semesters_list:
-        x[('c','s')] = model.new_bool_var(f"x_{c}_{s}")
+        x[(c,s)] = model.new_bool_var(f"x_{c}_{s}")
 
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:
-    model.add(sum(x[('c','s')] for s in semesters_list) <= 1)
+    model.add(sum(x[(c,s)] for s in semesters_list) <= 1)
 
 #Hard Constraint 2(required courses must be taken exactly once)
 for courses in reqcourses_list:
-    model.add(sum(x[('c','s')] for s in semesters_list) == 1)
+    model.add(sum(x[(c,s)] for s in semesters_list) == 1)
 
 #Hard Constraint 3(credit limits)
 for s in semesters_list:
-    model.add(sum(x[('c','s')]*credits_dict[c] for c in courses_list) <= max_credits)
+    model.add(sum(x[(c,s)]*credits_dict[c] for c in courses_list) <= max_credits)
 for s in semesters_list:
-    model.add(sum(x[('c','s')]*credits_dict[c] for c in courses_list) >= min_credits)
+    model.add(sum(x[(c,s)]*credits_dict[c] for c in courses_list) >= min_credits)
 
 #Hard Constraint 4
+new_df = df[df["prerequisites"] != "NONE"]
+prereq_dict = new_df.set_index("course_name")["prerequisites"].to_dict()
+for k in prereq_dict:
+    prereq_dict[k] = prereq_dict[k].split("_")
+
+for key in prereq_dict.keys():
+    for p in prereq_dict[key]:
+        for s in semesters_list:
+            model.add(x[key,s]<= sum(x[p,t] for t in range(1,s)))
 
 
 #solver
