@@ -48,6 +48,29 @@ for key in prereq_dict.keys():
         for s in semesters_list:
             model.Add(x[key,s]<= sum(x[p,t] for t in range(1,s)))
 
+#Hard Constraint 5(Time conflicts)
+y = {}
+for c in courses_list:
+    y[c] = z
+
+    z = {"l" : (tuple(str(df["lecture"].values[0]).split("/"))[i].split("_") for i in range(3)),
+         "t" : (tuple(str(df["tutorial"].values[0]).split("/"))[i].split("_") for i in range(3)),
+         "p" : (tuple(str(df["tutorial"].values[0]).split("/"))[i].split("_") for i in range(3))
+ }
+
+LTP = ("l", "t" ,"p")
+for a in courses_list:
+    for b in courses_list:
+        for i in range(3):
+            for j in range(3):
+                for k in LTP:
+                    for m in LTP:
+                        if y[a][m][i][0] == y[b][k][j][0] and m!=k and i!=j and a!=b:
+                            if y[a][m][i][1] < y[b][k][j][2] or y[b][k][j][1] < y[a][m][i][2] or y[a][m][i][1] == y[b][k][j][1]:
+                                model.Add(x[a,s] + x[b,s] <= 1)
+
+
+
 
 
 

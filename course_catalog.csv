@@ -1,8 +1,12 @@
-course_name,lecture,tutorial,practical,total,credits,prerequisites
-BC101,1,0,3,4,6,NONE
-BL101,3,1,0,4,11,NONE
-BO201,3,1,0,4,11,NONE
-CHO101,3,1,0,4,11,NONE
+course_name,lecture,tutorial,practical,total,credits,prerequisites,
+BC101-A,MON_10_11,0,WED_9_12,6,NONE,
+BC101-B,6,NONE,
+BL101-A,11,NONE,
+BL101-B,MON_10_11/TUE_10_11/WED_10_11,FRI_10_11,0,4,11,NONE,
+BO201-A,3,1,0,4,11,NONE,
+BO201-B,3,1,0,4,11,NONE,
+CHO101-A,3,1,0,4,11,NONE
+CHO101-B,3,1,0,4,11,NONE
 CHO102,3,1,0,4,11,NONE
 CHO201,2,1,0,3,8,NONE
 CMO101,3,1,0,4,11,NONE
