@@ -23,8 +23,12 @@ for c in courses_list:
     model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
 
 #Hard Constraint 2(required courses for a particular major must be taken exactly once)
-major_pref = input("Your preferred major:")
 df2 = pd.read_csv("major_requirements.csv")
+majors_list = df2["major"].to_list()
+for index,value in enumerate(majors_list):
+    print(index +1,value)
+q = int(input("your selected option is:"))
+major_pref = majors_list[q-1]
 
 req_string = df2[df2["major"] == major_pref]["required_courses"].values[0]
 for c in req_string.split("_") :
@@ -49,25 +53,48 @@ for key in prereq_dict.keys():
             model.Add(x[key,s]<= sum(x[p,t] for t in range(1,s)))
 
 #Hard Constraint 5(Time conflicts)
+def normalize_and_pad(slot_str):
+    # Split the slot string into individual slots (ignore "NONE")
+    if slot_str == "NONE":
+        slot_list = []
+    else:
+        slot_list = [slot.split("_") for slot in slot_str.split("/")]
+
+    # Normalize slot to 3 elements each
+    normalized = [
+        tuple(parts + [None] * (3 - len(parts)))   # pad inside tuple
+        for parts in slot_list
+    ]
+
+    # Pad L/T/P to always have exactly 3 slots
+    while len(normalized) < 3:
+        normalized.append((None, None, None))
+
+    # Trim in case there are more than 3 slots
+    return tuple(normalized[:3])
+
+
 y = {}
-z = {}
+
 for c in courses_list:
-    y[c] = z
-    z["l"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
-    z["t"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
-    z["p"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
+    row = df[df["course_name"] == c].iloc[0]
 
+    y[c] = {
+        "l": normalize_and_pad(row["lecture"]),
+        "t": normalize_and_pad(row["tutorial"]),
+        "p": normalize_and_pad(row["practical"])
+    }
+    
+LTP = ("l", "t", "p")
 
-
-LTP = ("l", "t" ,"p")
-for a in courses_list:
-    for b in courses_list:
-        for i in range(3):
-            for j in range(3):
-                for k in LTP:
-                    for m in LTP:
-                        if y[a][m][i][0] == y[b][k][j][0] and m!=k and i!=j and a!=b:
-                            if y[a][m][i][1] < y[b][k][j][2] or y[b][k][j][1] < y[a][m][i][2] or y[a][m][i][1] == y[b][k][j][1]:
+for a in courses_list: 
+    for b in courses_list: 
+        for i in range(3): 
+            for j in range(3): 
+                for k in LTP: 
+                    for m in LTP: 
+                        if y[a][m][i][0] == y[b][k][j][0] and m!=k and i!=j and a!=b and y[a][m][i][0] != None: 
+                            if y[a][m][i][1] < y[b][k][j][2] or y[b][k][j][1] < y[a][m][i][2] or y[a][m][i][1] == y[b][k][j][1]: 
                                 model.Add(x[a,s] + x[b,s] <= 1)
 
 #Hard Constraint 5(Electives)
