@@ -50,13 +50,14 @@ for key in prereq_dict.keys():
 
 #Hard Constraint 5(Time conflicts)
 y = {}
+z = {}
 for c in courses_list:
     y[c] = z
+    z["l"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
+    z["t"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
+    z["p"] = tuple(tuple(str(df[df["course_name"] == c]["lecture"]).split("/"))[i].split("_") for i in range(3))
 
-    z = {"l" : (tuple(str(df["lecture"].values[0]).split("/"))[i].split("_") for i in range(3)),
-         "t" : (tuple(str(df["tutorial"].values[0]).split("/"))[i].split("_") for i in range(3)),
-         "p" : (tuple(str(df["tutorial"].values[0]).split("/"))[i].split("_") for i in range(3))
- }
+
 
 LTP = ("l", "t" ,"p")
 for a in courses_list:
@@ -69,7 +70,13 @@ for a in courses_list:
                             if y[a][m][i][1] < y[b][k][j][2] or y[b][k][j][1] < y[a][m][i][2] or y[a][m][i][1] == y[b][k][j][1]:
                                 model.Add(x[a,s] + x[b,s] <= 1)
 
+#Hard Constraint 5(Electives)
+eldf = pd.red_csv("electives_catalog.csv")
 
+for s in range(5,9):
+    model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) == 1)
+for s in range(5,9):
+    model.Add(sum(x[c,s] for c in eldf[major_pref].to_list()) == 1)
 
 
 
