@@ -1,1 +1,5 @@
-open_electives,Biochemical_Engineering,Engineering_physics
+open_electives,Biomedical_Engineering,Engineering_physics
+CS201,EE201,MA201
+CS202,EE202,MA202
+BIO201,CHE201,EC201
+BIO202,CHE202,EC202
