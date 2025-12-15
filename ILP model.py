@@ -116,6 +116,17 @@ for c in courses_list:
                     continue
                 else:
                     model.Add(x[(m,s)] >= x[(c,s)])
+
+#Hard Constraint 7(Semester Availabilty)
+sem_aval_list = df["semester_available"].to_list()
+for i, each in enumerate(sem_aval_list):
+    sem_aval_list[i] = [int(s) for s in str(each).split("|")]
+sem_aval = dict(zip(courses_list,sem_aval_list))
+for c in courses_list:
+    if s not in sem_aval[c]:
+        model.Add(x[(c,s)] == 0)
+
+
                     
 
 #Must Optimise objective(workload variance across all semesters):
