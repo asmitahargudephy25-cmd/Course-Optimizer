@@ -53,49 +53,51 @@ for key in prereq_dict.keys():
             model.Add(x[key,s]<= sum(x[p,t] for t in range(1,s)))
 
 #Hard Constraint 5(Time conflicts)
+from itertools import product
+
 def normalize_and_pad(slot_str):
-    # Split the slot string into individual slots (ignore "NONE")
     if slot_str == "NONE":
-        slot_list = []
+        slots = []
     else:
-        slot_list = [slot.split("_") for slot in slot_str.split("/")]
+        slots = [s.split("_") for s in slot_str.split("/")]
 
-    # Normalize slot to 3 elements each
-    normalized = [
-        tuple(parts + [None] * (3 - len(parts)))   # pad inside tuple
-        for parts in slot_list
-    ]
+    slots = [tuple(p + [None] * (3 - len(p))) for p in slots]
 
-    # Pad L/T/P to always have exactly 3 slots
-    while len(normalized) < 3:
-        normalized.append((None, None, None))
+    while len(slots) < 3:
+        slots.append((None, None, None))
 
-    # Trim in case there are more than 3 slots
-    return tuple(normalized[:3])
+    return tuple(slots[:3])
 
 
 y = {}
 
 for c in courses_list:
     row = df[df["course_name"] == c].iloc[0]
-
     y[c] = {
         "l": normalize_and_pad(row["lecture"]),
         "t": normalize_and_pad(row["tutorial"]),
         "p": normalize_and_pad(row["practical"])
     }
-    
+
 LTP = ("l", "t", "p")
 
-for a in courses_list: 
-    for b in courses_list: 
-        for i in range(3): 
-            for j in range(3): 
-                for k in LTP: 
-                    for m in LTP: 
-                        if y[a][m][i][0] == y[b][k][j][0] and m!=k and i!=j and a!=b and y[a][m][i][0] != None: 
-                            if y[a][m][i][1] < y[b][k][j][2] or y[b][k][j][1] < y[a][m][i][2] or y[a][m][i][1] == y[b][k][j][1]: 
-                                model.Add(x[a,s] + x[b,s] <= 1)
+for a, b in product(courses_list, repeat=2):
+    if a >= b:
+        continue
+
+    for k1, k2 in product(LTP, repeat=2):
+        for i in range(3):
+            for j in range(3):
+
+                day_a, start_a, end_a = y[a][k1][i]
+                day_b, start_b, end_b = y[b][k2][j]
+
+                if day_a is None or day_b is None:
+                    continue
+
+                if day_a == day_b and not (end_a <= start_b or end_b <= start_a):
+                    for s in semesters_list:
+                        model.Add(x[(a, s)] + x[(b, s)] <= 1)
 
 #Hard Constraint 5(Electives)
 eldf = pd.read_csv("electives_catalog.csv")
@@ -105,10 +107,21 @@ for s in range(5,9):
 for s in range(5,9):
     model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
 
+#Hard Constraint 6(Co-requisites)
+for c in courses_list:
+    for s in semesters_list:
+            must = df[df["course_name"] == c]["corequisites"].values[0].split("|")
+            for m in must:
+                if m == "NONE":
+                    continue
+                else:
+                    model.Add(x[(m,s)] >= x[(c,s)])
+                    
+
 #Must Optimise objective(workload variance across all semesters):
 workload = {}
 for s in semesters_list:
-    workload[s] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"]) for c in courses_list)
+    workload[s] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for c in courses_list)
 diff = {}
 for i in semesters_list:
     for j in semesters_list:
@@ -184,12 +197,12 @@ def extract_schedule(mod):
     solver = cp_model.CpSolver()
     if solver.Solve(mod) in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print("Optimal Schedule:")
-    for s in semesters_list:
-        taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
-        if taken:
-            print(f"Semester {s}: {taken}")
-        else:
-            print("No feasible schedule found.")        
+        for s in semesters_list:
+            taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
+            if taken:
+                print(f"Semester {s}: {taken}")
+    else:
+        print("No feasible schedule found.")        
 
 solver = cp_model.CpSolver()
 
