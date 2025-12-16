@@ -123,8 +123,9 @@ for i, each in enumerate(sem_aval_list):
     sem_aval_list[i] = [int(s) for s in str(each).split("|")]
 sem_aval = dict(zip(courses_list,sem_aval_list))
 for c in courses_list:
-    if s not in sem_aval[c]:
-        model.Add(x[(c,s)] == 0)
+    for s in semesters_list:
+        if s not in sem_aval[c]:
+            model.Add(x[(c,s)] == 0)
 
 
                     
@@ -159,7 +160,9 @@ for c in courses_list:
             if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5:
                 penalty_eve = sum(x[(c, s)]*7 for s in semesters_list)
 
-#1c.Minimize gaps
+penalty = penalty_morn + penalty_eve
+
+#2.Minimize gaps
 slots = []
 
 for c in courses_list:
@@ -175,58 +178,85 @@ day_slots = defaultdict(list)
 for day, start, end, course in slots:
     day_slots[day].append((start, end, course))
 
-total_gaps = 0
+gap_pairs = []
 
 for day, items in day_slots.items():
     items.sort(key=lambda x: x[0])
     for i in range(len(items) - 1):
-        end_current = items[i][1]
-        start_next = items[i+1][0]
-        if start_next > end_current:
-            total_gaps += (int(start_next) - int(end_current))
-penalty_gaps = total_gaps*5
+        c1 = items[i][2]
+        c2 = items[i+1][2]
+        gap = int(items[i+1][0]) - int(items[i][1])
 
-penalty = penalty_eve + penalty_morn + penalty_gaps
+        if gap > 0:
+            gap_pairs.append((c1, c2, gap))
 
-#2.Fairness Imbalance
-keys = list(day_slots.keys())
-pairs = []
-for i in range(len(keys)):
-    for j in range(i + 1, len(keys)):
-        pairs.append((keys[i], keys[j]))
+gap_penalty_vars = []
 
-diff = 0
-for day1,day2 in pairs:
-    if len(day1) > len(day2):
-        diff = diff + len(day1) - len(day2)
-    else:
-        diff = diff + len(day2) - len(day1)
+for (c1, c2, gap) in gap_pairs:
+    for s in semesters_list:
+        g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+
+        # g = 1 if both courses are taken in semester s
+        model.Add(g <= x[(c1, s)])
+        model.Add(g <= x[(c2, s)])
+        model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
+
+        gap_penalty_vars.append(gap * g)
+
+penalty_gaps = 5*sum(gap_penalty_vars)
 
 
+#3.Fairness Imbalance
+day_workload = {}
 
-def extract_schedule(mod):
-    solver = cp_model.CpSolver()
-    if solver.Solve(mod) in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        print("Optimal Schedule:")
-        for s in semesters_list:
-            taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
-            if taken:
-                print(f"Semester {s}: {taken}")
-    else:
-        print("No feasible schedule found.")        
+for day in day_slots:
+    day_workload[day] = sum(x[(c, s)] * int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (start, end, c) in day_slots[day] for s in semesters_list)
+
+day_diff_vars = []
+
+days = list(day_workload.keys())
+
+for i in range(len(days)):
+    for j in range(i + 1, len(days)):
+        d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}")
+        model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
+        model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
+        day_diff_vars.append(d)
+    
+imbalance = 3*sum(day_diff_vars)
 
 solver = cp_model.CpSolver()
 
-solver.Solve(model)
-extract_schedule(model)
-print(f"penalty = {solver.Value(penalty)}")
-print(f"imbalance = {solver.Value(diff)}")
-""""
-model_b = model.Copy()
-solver.Solve(model_b.Minimize(penalty))
-model_b.Add(penalty == solver.Value(penalty))
-solver.Solve(model_b.Minimise(diff))
-extract_schedule(model_b)
-print(penalty = solver.Value(penalty))
-print(imbalance = solver.Value(diff))
-"""
+#Objective 1: penalty
+model.Minimize(penalty)
+status = solver.Solve(model)
+assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+best_penalty = solver.Value(penalty)
+model.Add(penalty == best_penalty)
+
+#Objective 2: gap penalty
+model.Minimize(penalty_gaps)
+status = solver.Solve(model)
+assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+best_gaps = solver.Value(penalty_gaps)
+model.Add(penalty_gaps == best_gaps)
+
+#Objective 3: imbalance
+model.Minimize(imbalance)
+status = solver.Solve(model)
+
+if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    print("Optimal Schedule:")
+    for s in semesters_list:
+        taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
+        if taken:
+            print(f"Semester {s}: {taken}")
+
+    print(f"penalty   = {solver.Value(penalty)}")
+    print(f"gaps      = {solver.Value(penalty_gaps)}")
+    print(f"imbalance = {solver.Value(imbalance)}")
+else:
+    print("No feasible schedule found.")
+
