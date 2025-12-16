@@ -118,7 +118,7 @@ for c in courses_list:
                     model.Add(x[(m,s)] >= x[(c,s)])
 
 #Hard Constraint 7(Semester Availabilty)
-sem_aval_list = df["semester_available"].to_list()
+sem_aval_list = df["semesters_available"].to_list()
 for i, each in enumerate(sem_aval_list):
     sem_aval_list[i] = [int(s) for s in str(each).split("|")]
 sem_aval = dict(zip(courses_list,sem_aval_list))
@@ -130,7 +130,7 @@ for c in courses_list:
 
                     
 
-#Must Optimise objective(workload variance across all semesters):
+#1.Must Optimise objective(workload variance across all semesters):
 workload = {}
 for s in semesters_list:
     workload[s] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for c in courses_list)
@@ -142,27 +142,26 @@ for i in semesters_list:
             diff[(i,j)] = d
             model.Add(d >= workload[i] - workload[j])
             model.Add(d >= workload[j] - workload[i])
-model.Minimize(sum(diff.values()))
+penalty_workload = sum(diff.values())
 
-#Pareto optimisation
 
-#1a.Morning classes(before 10)
+#2a.Morning classes(before 10)
 for c in courses_list:
     for a in LTP:
         for b in range(3):
             if y[c][a][b][1] != None and int(y[c][a][b][1]) <= 10:
                 penalty_morn = sum(x[(c, s)]*10 for s in semesters_list)
 
-#1b.Classes after 5
+#2b.Classes after 5
 for c in courses_list:
     for a in LTP:
         for b in range(3):
             if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5:
                 penalty_eve = sum(x[(c, s)]*7 for s in semesters_list)
 
-penalty = penalty_morn + penalty_eve
+penalty_timimgs = penalty_morn + penalty_eve
 
-#2.Minimize gaps
+#3.Minimize gaps
 slots = []
 
 for c in courses_list:
@@ -206,7 +205,7 @@ for (c1, c2, gap) in gap_pairs:
 penalty_gaps = 5*sum(gap_penalty_vars)
 
 
-#3.Fairness Imbalance
+#4.Fairness Imbalance
 day_workload = {}
 
 for day in day_slots:
@@ -227,24 +226,23 @@ imbalance = 3*sum(day_diff_vars)
 
 solver = cp_model.CpSolver()
 
-#Objective 1: penalty
-model.Minimize(penalty)
+#Objective 1: workload penalty
+model.Minimize(penalty_workload)
 status = solver.Solve(model)
-assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+model.Add(penalty_workload == solver.Value(penalty_workload))
 
-best_penalty = solver.Value(penalty)
-model.Add(penalty == best_penalty)
-
-#Objective 2: gap penalty
-model.Minimize(penalty_gaps)
+#Objective 2: penalty
+model.Minimize(penalty_timimgs)
 status = solver.Solve(model)
-assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
-
-best_gaps = solver.Value(penalty_gaps)
-model.Add(penalty_gaps == best_gaps)
+model.Add(penalty_timimgs == solver.Value(penalty_timimgs))
 
 #Objective 3: imbalance
 model.Minimize(imbalance)
+status = solver.Solve(model)
+model.Add(imbalance == solver.Value(imbalance))
+
+#Objective 4: gap penalty
+model.Minimize(penalty_gaps)
 status = solver.Solve(model)
 
 if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -254,7 +252,7 @@ if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         if taken:
             print(f"Semester {s}: {taken}")
 
-    print(f"penalty   = {solver.Value(penalty)}")
+    print(f"penalty   = {solver.Value(penalty_timimgs)}")
     print(f"gaps      = {solver.Value(penalty_gaps)}")
     print(f"imbalance = {solver.Value(imbalance)}")
 else:
