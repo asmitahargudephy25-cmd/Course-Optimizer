@@ -146,18 +146,19 @@ penalty_workload = sum(diff.values())
 
 
 #2a.Morning classes(before 10)
-for c in courses_list:
-    for a in LTP:
-        for b in range(3):
-            if y[c][a][b][1] != None and int(y[c][a][b][1]) <= 10:
-                penalty_morn = sum(x[(c, s)]*10 for s in semesters_list)
+penalty_morn = sum(x[(c, s)]*10 for s in semesters_list 
+                                for c in courses_list 
+                                for a in LTP 
+                                for b in range(3)
+                                if y[c][a][b][1] != None and int(y[c][a][b][1]) <= 10)
 
 #2b.Classes after 5
-for c in courses_list:
-    for a in LTP:
-        for b in range(3):
-            if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5:
-                penalty_eve = sum(x[(c, s)]*7 for s in semesters_list)
+
+penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
+                              for c in courses_list
+                              for a in LTP
+                              for b in range(3)
+                              if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5)
 
 penalty_timimgs = penalty_morn + penalty_eve
 
@@ -217,44 +218,56 @@ days = list(day_workload.keys())
 
 for i in range(len(days)):
     for j in range(i + 1, len(days)):
-        d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}")
+        d = model.new_int_var(0, 100, f"day_diff_{days[i]}_{days[j]}")
         model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
         model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
         day_diff_vars.append(d)
     
 imbalance = 3*sum(day_diff_vars)
 
+model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance)
+
+#Pareto Solutions
+class ParetoCallback(cp_model.CpSolverSolutionCallback):
+    def __init__(self, objectives, x_vars):
+        super().__init__()
+        self.objectives = objectives
+        self.x_vars = x_vars
+        self.solutions = []
+
+    def OnSolutionCallback(self):
+        obj_vals = tuple(self.Value(o) for o in self.objectives)
+        assignment = {
+            (c, s): 1
+            for (c, s), v in self.x_vars.items()
+            if self.Value(v) == 1
+        }
+        self.solutions.append((obj_vals, assignment))
+
 solver = cp_model.CpSolver()
+solver.parameters.enumerate_all_solutions = True
+solver.parameters.max_time_in_seconds = 15
+callback = ParetoCallback([penalty_workload, penalty_timimgs, penalty_gaps, imbalance],x)
+solver.Solve(model, callback)
 
-#Objective 1: workload penalty
-model.Minimize(penalty_workload)
-status = solver.Solve(model)
-model.Add(penalty_workload == solver.Value(penalty_workload))
+def is_dominated(sol, others):
+    return any(
+        all(o <= s for o, s in zip(other[0], sol[0])) and
+        any(o < s for o, s in zip(other[0], sol[0]))
+        for other in others
+    )
 
-#Objective 2: penalty
-model.Minimize(penalty_timimgs)
-status = solver.Solve(model)
-model.Add(penalty_timimgs == solver.Value(penalty_timimgs))
+pareto_solutions = [
+    sol for sol in callback.solutions
+    if not is_dominated(sol, callback.solutions)
+]
 
-#Objective 3: imbalance
-model.Minimize(imbalance)
-status = solver.Solve(model)
-model.Add(imbalance == solver.Value(imbalance))
-
-#Objective 4: gap penalty
-model.Minimize(penalty_gaps)
-status = solver.Solve(model)
-
-if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-    print("Optimal Schedule:")
+for i, (obj, assign) in enumerate(pareto_solutions, 1):
+    print(f"Solution {i}")
+    print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
     for s in semesters_list:
-        taken = [c for c in courses_list if solver.Value(x[(c, s)]) == 1]
-        if taken:
-            print(f"Semester {s}: {taken}")
-
-    print(f"penalty   = {solver.Value(penalty_timimgs)}")
-    print(f"gaps      = {solver.Value(penalty_gaps)}")
-    print(f"imbalance = {solver.Value(imbalance)}")
-else:
-    print("No feasible schedule found.")
+        courses = [c for (c, sem) in assign if sem == s]
+        if courses:
+            print(f"Semester {s}: {courses}")
+    print("*" * 40)
 
