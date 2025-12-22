@@ -271,3 +271,5 @@ for i, (obj, assign) in enumerate(pareto_solutions, 1):
             print(f"Semester {s}: {courses}")
     print("*" * 40)
 
+x# = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
+
