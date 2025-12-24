@@ -126,8 +126,6 @@ for c in courses_list:
     for s in semesters_list:
         if s not in sem_aval[c]:
             model.Add(x[(c,s)] == 0)
-
-
                     
 
 #1.Must Optimise objective(workload variance across all semesters):
@@ -228,10 +226,25 @@ imbalance = 3*sum(day_diff_vars)
 model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance)
 solver = cp_model.CpSolver()
 solver.Solve(model)
+x*= {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
+
+solver.Value(penalty_workload)>500 or solver.Value(penalty_timimgs)>500 or solver.Value(penalty_gaps)>500 or solver.Value(imbalance)>500:
+
+ans = input("Did any course become unavailable")
+if ans is ("YES","Yes","yes","yea","yeah"):
+    n = input("How many courses became unavailable?")
+    min_val = float("inf")
+    for _ in range(n):
+        c = input("Course name[CAPS]: ")
+        s = input("Semester: ")
+        current_semester = min(min_val,s)
+        if s in sem_aval[c]:
+            sem_aval[c].remove(s)
+    
+
+
 
 #model for reoptmization
-
-x*= {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
 robust_model = cp_model.CpModel()
 
 #creating decision variables(each variable has a domain{0,1})
@@ -447,14 +460,13 @@ for i in range(len(days)):
     
 imbalance = 3*sum(day_diff_vars)
 
-#Robust Feature 1
-current_semester = p
+#Robust model requirements
 for c in courses_list:
     for s in semesters_list:
-        if s<=p:
+        if s<current_semester:
             robust_model.Add(x[(c, s)] == x*[(c,s)])
 
-#Robust Feature 2
+
 delta = {}
 
 for c in courses_list:
@@ -510,18 +522,5 @@ for i, (obj, assign) in enumerate(pareto_solutions, 1):
             print(f"Semester {s}: {courses}")
     print("*" * 40)
 
-current_semester = p
-for c in courses_list:
-    for s in semesters_list:
-        if s<=p:
-            robust_model.Add(x[(c, s)] == x*[(c,s)])
 
-delta = {}
-
-for c in courses_list:
-    for s in semesters_list:
-        delta[(c,s)] = robust_model.new_int_var(0,6,f"delta_{c}_{s}")
-        robust_model.Add(delta[(c,s)] >= x[(c,s)] - x*[(c,s)])
-        robust_model.Add(delta[(c,s)] >= x*[(c,s)] - x[(c,s)])
-penalty_stability = sum(delta.values())
 
