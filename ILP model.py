@@ -228,7 +228,7 @@ model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance)
 solver = cp_model.CpSolver()
 solver.Solve(model)
 #store baseline solution
-x*= {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
+x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
 
 #triggers for reoptimization
 def perf_feas():
@@ -237,15 +237,17 @@ def perf_feas():
     return False
 def ext_feas():
     ans = input("Did any course become unavailable")
-    if ans is ("YES","Yes","yes","yea","yeah"):
+    if ans.lower() in {"YES","Yes","yes","yea","yeah"}:
         n = input("How many courses became unavailable?")
-        min_val = float("inf")
+        affected_semesters = []
         for _ in range(n):
             c = input("Course name[CAPS]: ")
             s = input("Semester: ")
-            current_semester = min(min_val,s)
+            affected_semesters.append(s)
             if s in sem_aval[c]:
                 sem_aval[c].remove(s)
+        global current_semester
+        current_semester = min(affected_semesters)
         return True
     return False
 
@@ -473,8 +475,8 @@ if perf_feas() is True or ext_feas() is True:
     #Robust model requirements
     for c in courses_list:
         for s in semesters_list:
-            if s<current_semester:
-                robust_model.Add(x[(c, s)] == x*[(c,s)])
+            if s < current_semester:
+                robust_model.Add(x[(c, s)] == x0[(c,s)])
 
 
     delta = {}
@@ -482,13 +484,59 @@ if perf_feas() is True or ext_feas() is True:
     for c in courses_list:
         for s in semesters_list:
             delta[(c,s)] = robust_model.new_int_var(0,6,f"delta_{c}_{s}")
-            robust_model.Add(delta[(c,s)] >= x[(c,s)] - x*[(c,s)])
-            robust_model.Add(delta[(c,s)] >= x*[(c,s)] - x[(c,s)])
-    penalty_stability = sum(delta.values())
+            robust_model.Add(delta[(c,s)] >= x[(c,s)] - x0[(c,s)])
+            robust_model.Add(delta[(c,s)] >= x0[(c,s)] - x[(c,s)])
+    penalty_stability = sum((9 - s)*delta[(c, s)]for c in courses_list for s in semesters_list)
 
     robust_model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance 
                           + penalty_stability 
                           + epsilon)
+    
+    #Pareto Solutions
+    class ParetoCallback(cp_model.CpSolverSolutionCallback):
+        def __init__(self, objectives, x_vars):
+            super().__init__()
+            self.objectives = objectives
+            self.x_vars = x_vars
+            self.solutions = []
+
+        def OnSolutionCallback(self):
+            obj_vals = tuple(self.Value(o) for o in self.objectives)
+            assignment = {
+                (c, s): 1
+                for (c, s), v in self.x_vars.items()
+                if self.Value(v) == 1
+            }
+            self.solutions.append((obj_vals, assignment))
+
+    robust_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance,penalty_stability,epsilon]
+    robust_callback = ParetoCallback(robust_objectives,x)
+    robust_solver = cp_model.CpSolver()
+    robust_solver.parameters.enumerate_all_solutions = True
+    robust_solver.parameters.max_time_in_seconds = 15
+    
+    solver.Solve(robust_model, robust_callback)
+
+    def is_dominated(sol, others):
+        return any(
+            all(o <= s for o, s in zip(other[0], sol[0])) and
+            any(o < s for o, s in zip(other[0], sol[0]))
+            for other in others
+        )
+
+    pareto_solutions = [
+        sol for sol in robust_callback.solutions
+        if not is_dominated(sol, robust_callback.solutions)
+    ]
+
+    for i, (obj, assign) in enumerate(pareto_solutions, 1):
+        print(f"Solution {i}")
+        print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
+        for s in semesters_list:
+            courses = [c for (c, sem) in assign if sem == s]
+            if courses:
+                print(f"Semester {s}: {courses}")
+        print("*" * 40)
 
 #Pareto Solutions
 class ParetoCallback(cp_model.CpSolverSolutionCallback):
@@ -506,12 +554,12 @@ class ParetoCallback(cp_model.CpSolverSolutionCallback):
             if self.Value(v) == 1
         }
         self.solutions.append((obj_vals, assignment))
-
-solver = cp_model.CpSolver()
-solver.parameters.enumerate_all_solutions = True
-solver.parameters.max_time_in_seconds = 15
-callback = ParetoCallback([penalty_workload, penalty_timimgs, penalty_gaps, imbalance],x)
-solver.Solve(robust_model, callback)
+baseline_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance]
+baseline_callback = ParetoCallback(baseline_objectives,x)
+baseline_solver = cp_model.CpSolver()
+baseline_solver.parameters.enumerate_all_solutions = True
+baseline_solver.parameters.max_time_in_seconds = 15
+solver.Solve(model, baseline_callback)
 
 def is_dominated(sol, others):
     return any(
@@ -521,8 +569,8 @@ def is_dominated(sol, others):
     )
 
 pareto_solutions = [
-    sol for sol in callback.solutions
-    if not is_dominated(sol, callback.solutions)
+    sol for sol in baseline_callback.solutions
+    if not is_dominated(sol, baseline_callback.solutions)
 ]
 
 for i, (obj, assign) in enumerate(pareto_solutions, 1):
