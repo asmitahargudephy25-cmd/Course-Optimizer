@@ -31,6 +31,9 @@ for index,row in df.iterrows():
     graph.AddCourse(row["course_name"],row["credits"],str(row["prerquisites"]).split("_"),
                     str(row["coerquisites"]).split("_"),row["difficulty"],
                     str(row["semesters_available"]).split("|"),row["lecture"],row["tutorial"],row["practical"])
-
+    
+for index,row in df.iterrows():
+    for i,exy in enumerate(str(row["prerquisites"]).split("_")):
+        graph.AddPrerequisite(exy,row["course_name"])
 
     

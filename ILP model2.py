@@ -46,15 +46,8 @@ for s in semesters_list:
 
 
 #Hard Constraint 4(prerequisites)
-new_df = df[df["prerequisites"] != "NONE"]
-prereq_dict = new_df.set_index("course_name")["prerequisites"].to_dict()
-for k in prereq_dict:
-    prereq_dict[k] = prereq_dict[k].split("_")
-
-for key in prereq_dict.keys():
-    for p in prereq_dict[key]:
-        for s in semesters_list:
-            model.Add(x[key,s]<= sum(x[p,t] for t in range(1,s)))
+for prereq,course in graph.g.edges():
+    model.Add(sum(x[(prereq,s)] for sp in semesters_list if sp<s) >= x[(course,s)])
 
 #Hard Constraint 5(Time conflicts)
 from itertools import product
