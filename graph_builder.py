@@ -30,5 +30,7 @@ graph = CourseGraphBuilder()
 for index,row in df.iterrows():
     graph.AddCourse(row["course_name"],row["credits"],str(row["prerquisites"]).split("_"),
                     str(row["coerquisites"]).split("_"),row["difficulty"],
-                    str(row["semesters_available"]).split("|"),)
+                    str(row["semesters_available"]).split("|"),row["lecture"],row["tutorial"],row["practical"])
+
+
     

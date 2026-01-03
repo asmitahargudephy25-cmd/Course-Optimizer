@@ -1,15 +1,14 @@
 import pandas as pd
 
-courses_list = 
+courses_list = g.nodes.to_list()
 semesters_list = [1,2,3,4,5,6,7,8]
-credits_dict = df.set_index("course_name")["credits"].to_dict()
 
-max_credits = int(input("Enter max credits:"))
-min_credits = int(input("Enter min credits:"))
+
+
 
 import networkx as nx 
 from ortools.sat.python import cp_model 
-
+from graph_builder import graph
 #building model
 model = cp_model.CpModel()
 
@@ -36,9 +35,12 @@ for c in req_string.split("_") :
     model.Add(sum(x[(c,s)] for s in semesters_list) == 1)
 
 #Hard Constraint 3(credit limits)
+max_credits = int(input("Enter max credits:"))
+min_credits = int(input("Enter min credits:"))
+graph.AddCreditLimits(max_credits,min_credits)
 semester_credits = {}
 for s in semesters_list:
-    semester_credits[s] = sum(x[(c,s)] * int(credits_dict[c]) for c in courses_list)
+    semester_credits[s] = x[(c,s)]*graph.g.nodes[c]["credits"]
     model.Add(semester_credits[s] <= max_credits)
     model.Add(semester_credits[s] >= min_credits)
 
