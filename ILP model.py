@@ -16,7 +16,7 @@ model = cp_model.CpModel()
 x = {}
 for c in courses_list:
     for s in semesters_list:
-        x[(c,s)] = model.new_bool_var(f"x_{c}_{s}")
+        x[(c,s)] = model.NewBoolVar(f"x_{c}_{s}")
 
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:

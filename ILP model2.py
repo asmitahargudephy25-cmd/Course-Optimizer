@@ -1,14 +1,11 @@
 import pandas as pd
-
-courses_list = g.nodes.to_list()
-semesters_list = [1,2,3,4,5,6,7,8]
-
-
-
-
 import networkx as nx 
 from ortools.sat.python import cp_model 
 from graph_builder import graph
+
+courses_list = list(graph.g.nodes)
+semesters_list = [1,2,3,4,5,6,7,8]
+
 #building model
 model = cp_model.CpModel()
 
@@ -16,23 +13,21 @@ model = cp_model.CpModel()
 x = {}
 for c in courses_list:
     for s in semesters_list:
-        x[(c,s)] = model.new_bool_var(f"x_{c}_{s}")
+        x[(c,s)] = model.NewBoolVar(f"x_{c}_{s}")
 
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:
     model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
 
 #Hard Constraint 2(required courses for a particular major must be taken exactly once)
-df2 = pd.read_csv("major_requirements.csv")
-majors_list = df2["major"].to_list()
-for index,value in enumerate(majors_list):
-    print(index +1,value)
-q = int(input("your selected option is:"))
-major_pref = majors_list[q-1]
+majors_list = list(graph.g.graph["majors"]["required"].keys())
+for i,value in enumerate(majors_list):
+    print(f"{i+1}. {value}")
+p = int(input("Your selected preference number: "))
+major_pref = majors_list[p-1]
 
-req_string = str(df2[df2["major"] == major_pref]["required_courses"].values[0])
-for c in req_string.split("_") :
-    model.Add(sum(x[(c,s)] for s in semesters_list) == 1)
+for c in graph.g.graph["majors"]["required"][major_pref]:
+    model.Add(sum(x[c,s] for s in semesters_list)== 1)
 
 #Hard Constraint 3(credit limits)
 max_credits = int(input("Enter max credits:"))
@@ -40,49 +35,40 @@ min_credits = int(input("Enter min credits:"))
 graph.AddCreditLimits(max_credits,min_credits)
 semester_credits = {}
 for s in semesters_list:
-    semester_credits[s] = x[(c,s)]*graph.g.nodes[c]["credits"]
+    semester_credits[s] = sum(x[(c,s)]*graph.g.nodes[c]["credits"] for c in courses_list)
     model.Add(semester_credits[s] <= max_credits)
     model.Add(semester_credits[s] >= min_credits)
 
 
 #Hard Constraint 4(prerequisites)
-for prereq,course in graph.g.edges():
-    model.Add(sum(x[(prereq,s)] for sp in semesters_list if sp<s) >= x[(course,s)])
+for u,v,data in graph.g.edges(data = True):
+    if data["type"] == "prerequisite":
+        for s in semesters_list:
+            model.Add(sum(x[(u,sp)] for sp in semesters_list if sp<s) >= x[(v,s)])
 
 #Hard Constraint 5(Time conflicts)
 for u,v,data in graph.g.edges(data = True):
-    if data["type"] == "time_conflict":
+    if data["type"] == "conflict":
         for s in semesters_list:
             model.Add(x[(u,s)] + x[(v,s)] <= 1)
 
 #Hard Constraint 6(Electives)
-eldf = pd.read_csv("electives_catalog.csv")
-
 for s in range(5,9):
-    model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) == 1)
+    model.Add(sum(x[(c,s)] for c in graph.g.graph["open_electives"]) <= 1)
 for s in range(5,9):
-    model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
+    model.Add(sum(x[(c,s)] for c in graph.g.graph["majors"]["electives"][major_pref]) == 1)
 
 #Hard Constraint 7(Co-requisites)
-for c in courses_list:
-    for s in semesters_list:
-            must = df[df["course_name"] == c]["corequisites"].values[0].split("|")
-            for m in must:
-                if m == "NONE":
-                    continue
-                else:
-                    model.Add(x[(m,s)] >= x[(c,s)])
+for u,v,data in graph.g.edges(data= True):
+    if data["type"] == "corequisite":
+        for s in semesters_list:
+            model.Add(x[(u,s)]== x[(v,s)])
 
 #Hard Constraint 8(Semester Availabilty)
-sem_aval_list = df["semesters_available"].to_list()
-for i, each in enumerate(sem_aval_list):
-    sem_aval_list[i] = [int(s) for s in str(each).split("|")]
-sem_aval = dict(zip(courses_list,sem_aval_list))
 for c in courses_list:
     for s in semesters_list:
-        if s not in sem_aval[c]:
-            model.Add(x[(c,s)] == 0)
-                    
+        if s not in graph.g.nodes[c]["availability"]:
+            model.Add(x[(c,s)]== 0)
 
 #1.Must Optimise objective(workload variance across all semesters):
 workload = {}

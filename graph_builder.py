@@ -23,6 +23,7 @@ def slot_conflict(slot1,slot2):
         return False
     if int(s1)<int(e2) and int(s2)<int(e1):
         return True
+    return False
 
 def course_conflict(c1,c2):
     slots1 = (graph.g.nodes[c1]["lecture"] + graph.g.nodes[c1]["tutorial"] + graph.g.nodes[c1]["practical"])
@@ -39,9 +40,9 @@ class CourseGraphBuilder:
     def __init__(self):
         self.g = nx.DiGraph()
 
-    def AddCourse(self,course,credits,prerequsites,corequisites,difficulty,semesters_aval,lecture,tutorial,practical):
+    def AddCourse(self,course,credits,prerequsites,corequisites,difficulty,semesters_avalaible,lecture,tutorial,practical):
         self.g.add_node(course,credits = credits,prerequsites = prerequsites, corequisites = corequisites,
-                   difficulty = difficulty,availability = semesters_aval,
+                   difficulty = difficulty,availability = semesters_avalaible,
                    lecture = normalize_and_pad(lecture),tutorial = normalize_and_pad(tutorial),practical = normalize_and_pad(practical))
         
     def AddPrerequisite(self,c1,c2):
@@ -60,19 +61,41 @@ class CourseGraphBuilder:
         self.g.graph["min_credits"] = min_credits
 
 df = pd.read_csv("course_catalog.csv")
-courses_list = g.nodes.to_list()
 graph = CourseGraphBuilder()
-for index,row in df.iterrows():
-    graph.AddCourse(row["course_name"],row["credits"],str(row["prerquisites"]).split("_"),
-                    str(row["coerquisites"]).split("_"),row["difficulty"],
-                    str(row["semesters_available"]).split("|"),row["lecture"],row["tutorial"],row["practical"])
+
+for index, row in df.iterrows():
+    availability = list(map(int, str(row["semesters_available"]).split("|")))
+
+    graph.AddCourse(row["course_name"],row["credits"],str(row["prerequisites"]).split("_"),
+                    str(row["corequisites"]).split("_"),row["difficulty"],
+                    availability,row["lecture"],row["tutorial"],row["practical"])
+    
+courses_list = list(graph.g.nodes)
     
 for index,row in df.iterrows():
-    for i,exy in enumerate(str(row["prerquisites"]).split("_")):
-        graph.AddPrerequisite(exy,row["course_name"])
+    for exy in str(row["prerequisites"]).split("_"):
+        if row["prerequisites"] != "NONE":
+            graph.AddPrerequisite(exy, row["course_name"])
 
 for i in range(len(courses_list)):
     for j in range(i+1,len(courses_list)):
         if course_conflict(courses_list[i],courses_list[j]):
             graph.AddConflict(courses_list[i],courses_list[j])
 
+for index,row in df.iterrows():
+    if row["corequisites"] != "NONE":
+        for co in str(row["corequisites"]).split("_"):
+            graph.AddCorequisite(row["course_name"], co)
+
+
+df2 = pd.read_csv("major_requirements.csv")
+graph.g.graph["majors"]= {}
+graph.g.graph["majors"]["required"] = {}
+for index,row in df2.iterrows():
+    graph.g.graph["majors"]["required"][row["major"]] = str(row["required_courses"]).split("_")
+
+df3 = pd.read_csv("electives_catalog.csv")
+graph.g.graph["open_electives"] = df3["open_electives"].to_list()
+graph.g.graph["majors"]["electives"] = {}
+for col_name,col_data in df3.items():
+    graph.g.graph["majors"]["electives"][col_name] = col_data.to_list()
