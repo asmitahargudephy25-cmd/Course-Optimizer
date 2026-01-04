@@ -50,53 +50,12 @@ for prereq,course in graph.g.edges():
     model.Add(sum(x[(prereq,s)] for sp in semesters_list if sp<s) >= x[(course,s)])
 
 #Hard Constraint 5(Time conflicts)
-from itertools import product
+for u,v,data in graph.g.edges(data = True):
+    if data["type"] == "time_conflict":
+        for s in semesters_list:
+            model.Add(x[(u,s)] + x[(v,s)] <= 1)
 
-def normalize_and_pad(slot_str):
-    if slot_str == "NONE":
-        slots = []
-    else:
-        slots = [s.split("_") for s in slot_str.split("/")]
-
-    slots = [tuple(p + [None] * (3 - len(p))) for p in slots]
-
-    while len(slots) < 3:
-        slots.append((None, None, None))
-
-    return tuple(slots[:3])
-
-
-y = {}
-
-for c in courses_list:
-    row = df[df["course_name"] == c].iloc[0]
-    y[c] = {
-        "l": normalize_and_pad(row["lecture"]),
-        "t": normalize_and_pad(row["tutorial"]),
-        "p": normalize_and_pad(row["practical"])
-    }
-
-LTP = ("l", "t", "p")
-
-for a, b in product(courses_list, repeat=2):
-    if a >= b:
-        continue
-
-    for k1, k2 in product(LTP, repeat=2):
-        for i in range(3):
-            for j in range(3):
-
-                day_a, start_a, end_a = y[a][k1][i]
-                day_b, start_b, end_b = y[b][k2][j]
-
-                if day_a is None or day_b is None:
-                    continue
-
-                if day_a == day_b and not (end_a <= start_b or end_b <= start_a):
-                    for s in semesters_list:
-                        model.Add(x[(a, s)] + x[(b, s)] <= 1)
-
-#Hard Constraint 5(Electives)
+#Hard Constraint 6(Electives)
 eldf = pd.read_csv("electives_catalog.csv")
 
 for s in range(5,9):
@@ -104,7 +63,7 @@ for s in range(5,9):
 for s in range(5,9):
     model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
 
-#Hard Constraint 6(Co-requisites)
+#Hard Constraint 7(Co-requisites)
 for c in courses_list:
     for s in semesters_list:
             must = df[df["course_name"] == c]["corequisites"].values[0].split("|")
@@ -114,7 +73,7 @@ for c in courses_list:
                 else:
                     model.Add(x[(m,s)] >= x[(c,s)])
 
-#Hard Constraint 7(Semester Availabilty)
+#Hard Constraint 8(Semester Availabilty)
 sem_aval_list = df["semesters_available"].to_list()
 for i, each in enumerate(sem_aval_list):
     sem_aval_list[i] = [int(s) for s in str(each).split("|")]
