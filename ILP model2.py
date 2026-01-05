@@ -62,7 +62,7 @@ for s in range(5,9):
 for u,v,data in graph.g.edges(data= True):
     if data["type"] == "corequisite":
         for s in semesters_list:
-            model.Add(x[(u,s)]== x[(v,s)])
+            model.Add(x[(u,s)]<= x[(v,s)])
 
 #Hard Constraint 8(Semester Availabilty)
 for c in courses_list:

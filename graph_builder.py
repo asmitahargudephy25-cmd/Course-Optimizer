@@ -25,9 +25,9 @@ def slot_conflict(slot1,slot2):
         return True
     return False
 
-def course_conflict(c1,c2):
-    slots1 = (graph.g.nodes[c1]["lecture"] + graph.g.nodes[c1]["tutorial"] + graph.g.nodes[c1]["practical"])
-    slots2 = (graph.g.nodes[c2]["lecture"] + graph.g.nodes[c2]["tutorial"] + graph.g.nodes[c2]["practical"])
+def course_conflict(G,c1,c2):
+    slots1 = (G.nodes[c1]["lecture"] + G.nodes[c1]["tutorial"] + G.nodes[c1]["practical"])
+    slots2 = (G.nodes[c2]["lecture"] + G.nodes[c2]["tutorial"] + G.nodes[c2]["practical"])
 
     for slot1 in slots1:
         for slot2 in slots2:
@@ -73,17 +73,17 @@ for index, row in df.iterrows():
 courses_list = list(graph.g.nodes)
     
 for index,row in df.iterrows():
-    for exy in str(row["prerequisites"]).split("_"):
-        if row["prerequisites"] != "NONE":
+    if str(row["prerequisites"]) != "NONE":
+        for exy in str(row["prerequisites"]).split("_"):
             graph.AddPrerequisite(exy, row["course_name"])
 
 for i in range(len(courses_list)):
     for j in range(i+1,len(courses_list)):
-        if course_conflict(courses_list[i],courses_list[j]):
+        if course_conflict(graph.g,courses_list[i],courses_list[j]):
             graph.AddConflict(courses_list[i],courses_list[j])
 
 for index,row in df.iterrows():
-    if row["corequisites"] != "NONE":
+    if str(row["corequisites"]) != "NONE":
         for co in str(row["corequisites"]).split("_"):
             graph.AddCorequisite(row["course_name"], co)
 
