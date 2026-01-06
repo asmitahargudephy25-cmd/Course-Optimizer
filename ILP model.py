@@ -397,7 +397,7 @@ if perf_feas() is True or ext_feas() is True:
                                     for c in courses_list 
                                     for a in LTP 
                                     for b in range(3)
-                                    if y[c][a][b][1] != None and int(y[c][a][b][1]) <= 10)
+                                    if y[c][a][b][2] != None and int(y[c][a][b][2]) <= 10)
 
     #2b.Classes after 5
 
@@ -405,7 +405,7 @@ if perf_feas() is True or ext_feas() is True:
                                 for c in courses_list
                                 for a in LTP
                                 for b in range(3)
-                                if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5)
+                                if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
 
     penalty_timimgs = penalty_morn + penalty_eve
 
