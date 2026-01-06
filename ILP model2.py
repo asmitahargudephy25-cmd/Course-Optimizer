@@ -132,11 +132,11 @@ for day, items in day_slots.items():
         gap = s2 - e1
 
         if gap > 0:
-            for sem in semesters_list:
-                g = model.NewBoolVar(f"gap_{c1}_{c2}_{sem}")
-                model.Add(g <= x[(c1, sem)])
-                model.Add(g <= x[(c2, sem)])
-                model.Add(g >= x[(c1, sem)] + x[(c2, sem)] - 1)
+            for s in semesters_list:
+                g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+                model.Add(g <= x[(c1, s)])
+                model.Add(g <= x[(c2, s)])
+                model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
                 gap_penalty_vars.append(gap * g)
 
 penalty_gaps = 5*sum(gap_penalty_vars)
@@ -150,7 +150,7 @@ days = list(day_slots.keys())
 for s in semesters_list:
     day_workload = {}
     for day in days:
-        day_workload[day] = sum(x[(c, s)] * graph.g.nodes[c]["difficulty"] for (_, _, c) in day_slots[day])
+        day_workload[day] = sum(x[(c, s)]*graph.g.nodes[c]["difficulty"] for (_, _, c) in day_slots[day])
 
     for i in range(len(days)):
         for j in range(i + 1, len(days)):
@@ -314,11 +314,11 @@ if perf_feas() is True or ext_feas() is True:
             gap = s2 - e1
 
             if gap > 0:
-                for sem in semesters_list:
-                    g = model.NewBoolVar(f"gap_{c1}_{c2}_{sem}")
-                    model.Add(g <= x[(c1, sem)])
-                    model.Add(g <= x[(c2, sem)])
-                    model.Add(g >= x[(c1, sem)] + x[(c2, sem)] - 1)
+                for s in semesters_list:
+                    g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+                    model.Add(g <= x[(c1, s)])
+                    model.Add(g <= x[(c2, s)])
+                    model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
                     gap_penalty_vars.append(gap * g)
 
     penalty_gaps = 5*sum(gap_penalty_vars)
@@ -332,7 +332,7 @@ if perf_feas() is True or ext_feas() is True:
     for s in semesters_list:
         day_workload = {}
         for day in days:
-            day_workload[day] = sum(x[(c, s)] * graph.g.nodes[c]["difficulty"] for (_, _, c) in day_slots[day])
+            day_workload[day] = sum(x[(c, s)]*graph.g.nodes[c]["difficulty"] for (_, _, c) in day_slots[day])
 
         for i in range(len(days)):
             for j in range(i + 1, len(days)):

@@ -137,27 +137,31 @@ diff = {}
 for i in semesters_list:
     for j in semesters_list:
         if i < j:
-            d = model.new_int_var(0, 50, f"diff_{i}_{j}")
+            d = model.NewIntVar(0, 50, f"diff_{i}_{j}")
             diff[(i,j)] = d
             model.Add(d >= workload[i] - workload[j])
             model.Add(d >= workload[j] - workload[i])
 penalty_workload = 15*sum(diff.values())
 
+course_taken = {}
+for c in courses_list:
+    course_taken[c] = model.NewBoolVar(f"taken_{c}")
+    model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
 
 #2a.Morning classes(before 10)
-penalty_morn = sum(x[(c, s)]*10 for s in semesters_list 
+penalty_morn = sum(x[(c, s)]*10 
                                 for c in courses_list 
                                 for a in LTP 
                                 for b in range(3)
-                                if y[c][a][b][1] != None and int(y[c][a][b][1]) <= 10)
+                                if y[c][a][b][2] != None and int(y[c][a][b][2]) <= 10)
 
 #2b.Classes after 5
 
-penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
+penalty_eve = sum(x[(c, s)]*7 
                               for c in courses_list
                               for a in LTP
                               for b in range(3)
-                              if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 5)
+                              if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
 
 penalty_timimgs = penalty_morn + penalty_eve
 
@@ -177,50 +181,43 @@ day_slots = defaultdict(list)
 for day, start, end, course in slots:
     day_slots[day].append((start, end, course))
 
-gap_pairs = []
+gap_penalty_vars = []
 
 for day, items in day_slots.items():
     items.sort(key=lambda x: x[0])
     for i in range(len(items) - 1):
-        c1 = items[i][2]
-        c2 = items[i+1][2]
-        gap = int(items[i+1][0]) - int(items[i][1])
+        s1, e1, c1 = items[i]
+        s2, e2, c2 = items[i + 1]
+        gap = s2 - e1
 
         if gap > 0:
-            gap_pairs.append((c1, c2, gap))
+            for s in semesters_list:
+                g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+                model.Add(g <= x[(c1, s)])
+                model.Add(g <= x[(c2, s)])
+                model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
+                gap_penalty_vars.append(gap * g)
 
-gap_penalty_vars = []
-
-for (c1, c2, gap) in gap_pairs:
-    for s in semesters_list:
-        g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
-
-        # g = 1 if both courses are taken in semester s
-        model.Add(g <= x[(c1, s)])
-        model.Add(g <= x[(c2, s)])
-        model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
-
-        gap_penalty_vars.append(gap * g)
 
 penalty_gaps = 5*sum(gap_penalty_vars)
 
 
 #4.Fairness Imbalance
-day_workload = {}
-
-for day in day_slots:
-    day_workload[day] = sum(x[(c, s)] * int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (start, end, c) in day_slots[day] for s in semesters_list)
-
 day_diff_vars = []
 
-days = list(day_workload.keys())
+days = list(day_slots.keys())
 
-for i in range(len(days)):
-    for j in range(i + 1, len(days)):
-        d = model.new_int_var(0, 100, f"day_diff_{days[i]}_{days[j]}")
-        model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
-        model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
-        day_diff_vars.append(d)
+for s in semesters_list:
+    day_workload = {}
+    for day in days:
+        day_workload[day] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (_, _, c) in day_slots[day])
+
+    for i in range(len(days)):
+        for j in range(i + 1, len(days)):
+            d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
+            model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
+            model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
+            day_diff_vars.append(d)
     
 imbalance = 3*sum(day_diff_vars)
 
@@ -259,7 +256,7 @@ if perf_feas() is True or ext_feas() is True:
     x = {}
     for c in courses_list:
         for s in semesters_list:
-            x[(c,s)] = robust_model.new_bool_var(f"x_{c}_{s}")
+            x[(c,s)] = robust_model.NewBoolVar(f"x_{c}_{s}")
 
     #Hard Constraint 1(each course must be taken atmost once)
     for c in courses_list:
@@ -385,15 +382,19 @@ if perf_feas() is True or ext_feas() is True:
     for i in semesters_list:
         for j in semesters_list:
             if i < j:
-                d = robust_model.new_int_var(0, 50, f"diff_{i}_{j}")
+                d = robust_model.NewIntVar(0, 50, f"diff_{i}_{j}")
                 diff[(i,j)] = d
                 robust_model.Add(d >= workload[i] - workload[j])
                 robust_model.Add(d >= workload[j] - workload[i])
-    penalty_workload = sum(diff.values())
+    penalty_workload = 15*sum(diff.values())
 
+    course_taken = {}
+    for c in courses_list:
+        course_taken[c] = robust_model.NewBoolVar(f"taken_{c}")
+        robust_model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
 
     #2a.Morning classes(before 10)
-    penalty_morn = sum(x[(c, s)]*10 for s in semesters_list 
+    penalty_morn = sum(x[(c, s)]*10 
                                     for c in courses_list 
                                     for a in LTP 
                                     for b in range(3)
@@ -401,7 +402,7 @@ if perf_feas() is True or ext_feas() is True:
 
     #2b.Classes after 5
 
-    penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
+    penalty_eve = sum(x[(c, s)]*7 
                                 for c in courses_list
                                 for a in LTP
                                 for b in range(3)
@@ -425,50 +426,43 @@ if perf_feas() is True or ext_feas() is True:
     for day, start, end, course in slots:
         day_slots[day].append((start, end, course))
 
-    gap_pairs = []
+    gap_penalty_vars = []
 
     for day, items in day_slots.items():
         items.sort(key=lambda x: x[0])
         for i in range(len(items) - 1):
-            c1 = items[i][2]
-            c2 = items[i+1][2]
-            gap = int(items[i+1][0]) - int(items[i][1])
+            s1, e1, c1 = items[i]
+            s2, e2, c2 = items[i + 1]
+            gap = s2 - e1
 
             if gap > 0:
-                gap_pairs.append((c1, c2, gap))
+                for s in semesters_list:
+                    g = robust_model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+                    robust_model.Add(g <= x[(c1, s)])
+                    robust_model.Add(g <= x[(c2, s)])
+                    robust_model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
+                    gap_penalty_vars.append(gap * g)
 
-    gap_penalty_vars = []
-
-    for (c1, c2, gap) in gap_pairs:
-        for s in semesters_list:
-            g = robust_model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
-
-            # g = 1 if both courses are taken in semester s
-            robust_model.Add(g <= x[(c1, s)])
-            robust_model.Add(g <= x[(c2, s)])
-            robust_model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
-
-            gap_penalty_vars.append(gap * g)
 
     penalty_gaps = 5*sum(gap_penalty_vars)
 
 
     #4.Fairness Imbalance
-    day_workload = {}
-
-    for day in day_slots:
-        day_workload[day] = sum(x[(c, s)] * int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (start, end, c) in day_slots[day] for s in semesters_list)
-
     day_diff_vars = []
 
-    days = list(day_workload.keys())
+    days = list(day_slots.keys())
 
-    for i in range(len(days)):
-        for j in range(i + 1, len(days)):
-            d = robust_model.new_int_var(0, 100, f"day_diff_{days[i]}_{days[j]}")
-            robust_model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
-            robust_model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
-            day_diff_vars.append(d)
+    for s in semesters_list:
+        day_workload = {}
+        for day in days:
+            day_workload[day] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (_, _, c) in day_slots[day])
+
+        for i in range(len(days)):
+            for j in range(i + 1, len(days)):
+                d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
+                robust_model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
+                robust_model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
+                day_diff_vars.append(d)
         
     imbalance = 3*sum(day_diff_vars)
 
