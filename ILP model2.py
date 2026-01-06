@@ -48,7 +48,7 @@ for u,v,data in graph.g.edges(data = True):
 
 #Hard Constraint 5(Time conflicts)
 for u,v,data in graph.g.edges(data = True):
-    if data["type"] == "conflict":
+    if data["type"] == "conflict" and u<v:
         for s in semesters_list:
             model.Add(x[(u,s)] + x[(v,s)] <= 1)
 
@@ -84,13 +84,9 @@ for i in semesters_list:
             model.Add(d >= workload[j] - workload[i])
 penalty_workload = 15*sum(diff.values())
 
-course_taken = {}
-for c in courses_list:
-    course_taken[c] = model.NewBoolVar(f"taken_{c}")
-    model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
 
 #2a.Morning classes(before 10)
-penalty_morn = sum(course_taken[c]*10 
+penalty_morn = sum(x[(c,s)]*10  for s in semesters_list
                                 for c in courses_list 
                                 for a in ("lecture","tutorial","practical")
                                 for b in range(3)
@@ -98,7 +94,7 @@ penalty_morn = sum(course_taken[c]*10
 
 #2b.Classes after 5
 
-penalty_eve = sum(course_taken[c]*7 
+penalty_eve = sum(x[(c,s)]*7  for s in semesters_list
                               for c in courses_list
                               for a in ("lecture","tutorial","practical")
                               for b in range(3)
@@ -169,7 +165,7 @@ x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_lis
 
 #triggers for reoptimization
 def perf_feas():
-    if solver.Value(penalty_workload)>500 or solver.Value(penalty_timimgs)>500 or solver.Value(penalty_gaps)>500 or solver.Value(imbalance)>500:
+    if solver.Value(penalty_workload)>500 or solver.Value(penalty_timings)>500 or solver.Value(penalty_gaps)>500 or solver.Value(imbalance)>500:
         return True
     return False
 def ext_feas():
@@ -180,7 +176,7 @@ def ext_feas():
         for _ in range(n):
             c = input("Course name[CAPS]: ")
             s = input("Semester: ")
-            affected_semesters.append(s)
+            affected_semesters.append(int(s))
             if s in graph.g.nodes[c]["availability"]:
                 graph.g.nodes[c]["availability"].remove(s)
         global current_semester
@@ -228,7 +224,7 @@ if perf_feas() is True or ext_feas() is True:
 
     #Hard Constraint 5(Time conflicts)
     for u,v,data in graph.g.edges(data = True):
-        if data["type"] == "conflict":
+        if data["type"] == "conflict" and u<v:
             for s in semesters_list:
                 robust_model.Add(x[(u,s)] + x[(v,s)] <= 1)
 
@@ -260,19 +256,15 @@ if perf_feas() is True or ext_feas() is True:
     for i in semesters_list:
         for j in semesters_list:
             if i < j:
-                d = model.NewIntVar(0, 50, f"diff_{i}_{j}")
+                d = robust_model.NewIntVar(0, 50, f"diff_{i}_{j}")
                 diff[(i,j)] = d
-                model.Add(d >= workload[i] - workload[j])
-                model.Add(d >= workload[j] - workload[i])
+                robust_model.Add(d >= workload[i] - workload[j])
+                robust_model.Add(d >= workload[j] - workload[i])
     penalty_workload = 15*sum(diff.values())
 
-    course_taken = {}
-    for c in courses_list:
-        course_taken[c] = model.NewBoolVar(f"taken_{c}")
-        model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
 
     #2a.Morning classes(before 10)
-    penalty_morn = sum(course_taken[c]*10 
+    penalty_morn = sum(x[(c,s)]*10  for s in semesters_list
                                     for c in courses_list 
                                     for a in ("lecture","tutorial","practical")
                                     for b in range(3)
@@ -280,11 +272,11 @@ if perf_feas() is True or ext_feas() is True:
 
     #2b.Classes after 5
 
-    penalty_eve = sum(course_taken[c]*7 
-                                for c in courses_list
-                                for a in ("lecture","tutorial","practical")
-                                for b in range(3)
-                                if graph.g.nodes[c][a][b][1] != None and int(graph.g.nodes[c][a][b][1]) >= 17)
+    penalty_eve = sum(x[(c,s)]*7 for s in semesters_list
+                                 for c in courses_list
+                                 for a in ("lecture","tutorial","practical")
+                                 for b in range(3)
+                                 if graph.g.nodes[c][a][b][1] != None and int(graph.g.nodes[c][a][b][1]) >= 17)
 
     penalty_timings = penalty_morn + penalty_eve
 
@@ -315,10 +307,10 @@ if perf_feas() is True or ext_feas() is True:
 
             if gap > 0:
                 for s in semesters_list:
-                    g = model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
-                    model.Add(g <= x[(c1, s)])
-                    model.Add(g <= x[(c2, s)])
-                    model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
+                    g = robust_model.NewBoolVar(f"gap_{c1}_{c2}_{s}")
+                    robust_model.Add(g <= x[(c1, s)])
+                    robust_model.Add(g <= x[(c2, s)])
+                    robust_model.Add(g >= x[(c1, s)] + x[(c2, s)] - 1)
                     gap_penalty_vars.append(gap * g)
 
     penalty_gaps = 5*sum(gap_penalty_vars)
@@ -336,9 +328,9 @@ if perf_feas() is True or ext_feas() is True:
 
         for i in range(len(days)):
             for j in range(i + 1, len(days)):
-                d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
-                model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
-                model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
+                d = robust_model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
+                robust_model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
+                robust_model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
                 day_diff_vars.append(d)
         
             
@@ -409,46 +401,47 @@ if perf_feas() is True or ext_feas() is True:
                 print(f"Semester {s}: {courses}")
         print("*" * 40)
 
-#Pareto Solutions
-class ParetoCallback(cp_model.CpSolverSolutionCallback):
-    def __init__(self, objectives, x_vars):
-        super().__init__()
-        self.objectives = objectives
-        self.x_vars = x_vars
-        self.solutions = []
+else:
+    #Pareto Solutions
+    class ParetoCallback(cp_model.CpSolverSolutionCallback):
+        def __init__(self, objectives, x_vars):
+            super().__init__()
+            self.objectives = objectives
+            self.x_vars = x_vars
+            self.solutions = []
 
-    def OnSolutionCallback(self):
-        obj_vals = tuple(self.Value(o) for o in self.objectives)
-        assignment = {
-            (c, s): 1
-            for (c, s), v in self.x_vars.items()
-            if self.Value(v) == 1
-        }
-        self.solutions.append((obj_vals, assignment))
-baseline_objectives = [penalty_workload,penalty_timings,penalty_gaps,imbalance]
-baseline_callback = ParetoCallback(baseline_objectives,x)
-baseline_solver = cp_model.CpSolver()
-baseline_solver.parameters.enumerate_all_solutions = True
-baseline_solver.parameters.max_time_in_seconds = 15
-solver.Solve(model, baseline_callback)
+        def OnSolutionCallback(self):
+            obj_vals = tuple(self.Value(o) for o in self.objectives)
+            assignment = {
+                (c, s): 1
+                for (c, s), v in self.x_vars.items()
+                if self.Value(v) == 1
+            }
+            self.solutions.append((obj_vals, assignment))
+    baseline_objectives = [penalty_workload,penalty_timings,penalty_gaps,imbalance]
+    baseline_callback = ParetoCallback(baseline_objectives,x)
+    baseline_solver = cp_model.CpSolver()
+    baseline_solver.parameters.enumerate_all_solutions = True
+    baseline_solver.parameters.max_time_in_seconds = 15
+    solver.Solve(model, baseline_callback)
 
-def is_dominated(sol, others):
-    return any(
-        all(o <= s for o, s in zip(other[0], sol[0])) and
-        any(o < s for o, s in zip(other[0], sol[0]))
-        for other in others
-    )
+    def is_dominated(sol, others):
+        return any(
+            all(o <= s for o, s in zip(other[0], sol[0])) and
+            any(o < s for o, s in zip(other[0], sol[0]))
+            for other in others
+        )
 
-pareto_solutions = [
-    sol for sol in baseline_callback.solutions
-    if not is_dominated(sol, baseline_callback.solutions)
-]
+    pareto_solutions = [
+        sol for sol in baseline_callback.solutions
+        if not is_dominated(sol, baseline_callback.solutions)
+    ]
 
-for i, (obj, assign) in enumerate(pareto_solutions, 1):
-    print(f"Solution {i}")
-    print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
-    for s in semesters_list:
-        courses = [c for (c, sem) in assign if sem == s]
-        if courses:
-            print(f"Semester {s}: {courses}")
-    print("*" * 40)
+    for i, (obj, assign) in enumerate(pareto_solutions, 1):
+        print(f"Solution {i}")
+        print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
+        for s in semesters_list:
+            courses = [c for (c, sem) in assign if sem == s]
+            if courses:
+                print(f"Semester {s}: {courses}")
+        print("*" * 40)

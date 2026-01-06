@@ -188,7 +188,7 @@ for day, items in day_slots.items():
     for i in range(len(items) - 1):
         s1, e1, c1 = items[i]
         s2, e2, c2 = items[i + 1]
-        gap = s2 - e1
+        gap = int(s2) - int(e1)
 
         if gap > 0:
             for s in semesters_list:
@@ -433,7 +433,7 @@ if perf_feas() is True or ext_feas() is True:
         for i in range(len(items) - 1):
             s1, e1, c1 = items[i]
             s2, e2, c2 = items[i + 1]
-            gap = s2 - e1
+            gap = int(s2) - int(e1)
 
             if gap > 0:
                 for s in semesters_list:
