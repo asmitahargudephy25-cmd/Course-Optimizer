@@ -2,6 +2,7 @@ import pandas as pd
 df = pd.read_csv("course_catalog.csv")
 courses_list = df["course_name"].to_list()
 semesters_list = [1,2,3,4,5,6,7,8]
+difficulty = df.set_index("course_name")["difficulty"].to_dict()
 current_semester = min(semesters_list)
 credits_dict = df.set_index("course_name")["credits"].to_dict()
 
@@ -133,7 +134,7 @@ for c in courses_list:
 #1.Must Optimise objective(workload variance across all semesters):
 workload = {}
 for s in semesters_list:
-    workload[s] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for c in courses_list)
+    workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
 diff = {}
 for i in semesters_list:
     for j in semesters_list:
@@ -144,13 +145,10 @@ for i in semesters_list:
             model.Add(d >= workload[j] - workload[i])
 penalty_workload = 15*sum(diff.values())
 
-course_taken = {}
-for c in courses_list:
-    course_taken[c] = model.NewBoolVar(f"taken_{c}")
-    model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
+
 
 #2a.Morning classes(before 10)
-penalty_morn = sum(x[(c, s)]*10 
+penalty_morn = sum(x[(c, s)]*10 for s in semesters_list
                                 for c in courses_list 
                                 for a in LTP 
                                 for b in range(3)
@@ -158,7 +156,7 @@ penalty_morn = sum(x[(c, s)]*10
 
 #2b.Classes after 5
 
-penalty_eve = sum(x[(c, s)]*7 
+penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
                               for c in courses_list
                               for a in LTP
                               for b in range(3)
@@ -211,7 +209,7 @@ days = list(day_slots.keys())
 for s in semesters_list:
     day_workload = {}
     for day in days:
-        day_workload[day] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (_, _, c) in day_slots[day])
+        day_workload[day] = sum(x[(c, s)]*difficulty[c] for (_, _, c) in day_slots[day])
 
     for i in range(len(days)):
         for j in range(i + 1, len(days)):
@@ -234,16 +232,16 @@ def perf_feas():
         return True
     return False
 def ext_feas():
-    ans = int(input("Did any course become unavailable"))
+    ans = input("Did any course become unavailable")
     if ans in ("YES","Yes","yes","yea","yeah"):
-        n = input("How many courses became unavailable?")
+        n = int(input("How many courses became unavailable?"))
         affected_semesters = []
         for _ in range(n):
             c = input("Course name[CAPS]: ")
-            s = input("Semester: ")
+            s = int(input("Semester: "))
             affected_semesters.append(s)
             if s in sem_aval[c]:
-                sem_aval[c].remove(s)
+                sem_aval[c].remove(s)         
         global current_semester
         current_semester = min(affected_semesters)
         return True
@@ -278,10 +276,10 @@ if p or e:
         semester_credits[s] = sum(x[(c,s)] * int(credits_dict[c]) for c in courses_list)
     E = {}
     for s in semesters_list:
-        E[s] = robust_model.new_int_var(0,15,f"epsilon_{s}")
+        E[s] = robust_model.NewIntVar(0,15,f"epsilon_{s}")
         robust_model.Add(semester_credits[s] <= max_credits + E[s])
         robust_model.Add(semester_credits[s] >= min_credits - E[s])
-    epsilon = sum(E.values())*0.8
+    epsilon = sum(E.values())
 
     #Hard Constraint 4(prerequisites)
     new_df = df[df["prerequisites"] != "NONE"]
@@ -375,7 +373,7 @@ if p or e:
     #1.Must Optimise objective(workload variance across all semesters):
     workload = {}
     for s in semesters_list:
-        workload[s] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for c in courses_list)
+        workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
     diff = {}
     for i in semesters_list:
         for j in semesters_list:
@@ -386,13 +384,8 @@ if p or e:
                 robust_model.Add(d >= workload[j] - workload[i])
     penalty_workload = 15*sum(diff.values())
 
-    course_taken = {}
-    for c in courses_list:
-        course_taken[c] = robust_model.NewBoolVar(f"taken_{c}")
-        robust_model.Add(course_taken[c] == sum(x[(c, s)] for s in semesters_list))
-
     #2a.Morning classes(before 10)
-    penalty_morn = sum(x[(c, s)]*10 
+    penalty_morn = sum(x[(c, s)]*10 for s in semesters_list
                                     for c in courses_list 
                                     for a in LTP 
                                     for b in range(3)
@@ -400,11 +393,11 @@ if p or e:
 
     #2b.Classes after 5
 
-    penalty_eve = sum(x[(c, s)]*7 
-                                for c in courses_list
-                                for a in LTP
-                                for b in range(3)
-                                if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
+    penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
+                                 for c in courses_list
+                                 for a in LTP
+                                 for b in range(3)
+                                 if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
 
     penalty_timimgs = penalty_morn + penalty_eve
 
@@ -453,11 +446,11 @@ if p or e:
     for s in semesters_list:
         day_workload = {}
         for day in days:
-            day_workload[day] = sum(x[(c, s)]*int(df[df["course_name"] == c]["difficulty"].iloc[0]) for (_, _, c) in day_slots[day])
+            day_workload[day] = sum(x[(c, s)]*difficulty[c] for (_, _, c) in day_slots[day])
 
         for i in range(len(days)):
             for j in range(i + 1, len(days)):
-                d = model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
+                d = robust_model.NewIntVar(0, 100, f"day_diff_{days[i]}_{days[j]}_s{s}")
                 robust_model.Add(d >= day_workload[days[i]] - day_workload[days[j]])
                 robust_model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
                 day_diff_vars.append(d)
@@ -475,7 +468,7 @@ if p or e:
 
     for c in courses_list:
         for s in semesters_list:
-            delta[(c,s)] = robust_model.new_int_var(0,6,f"delta_{c}_{s}")
+            delta[(c,s)] = robust_model.NewIntVar(0,6,f"delta_{c}_{s}")
             robust_model.Add(delta[(c,s)] >= x[(c,s)] - x0[(c,s)])
             robust_model.Add(delta[(c,s)] >= x0[(c,s)] - x[(c,s)])
     penalty_stability = sum((9 - s)*delta[(c, s)]for c in courses_list for s in semesters_list)
