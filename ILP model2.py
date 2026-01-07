@@ -57,7 +57,7 @@ for u,v,data in graph.g.edges(data = True):
 for s in range(5,9):
     model.Add(sum(x[(c,s)] for c in graph.g.graph["open_electives"]) <= 1)
 for s in range(5,9):
-    model.Add(sum(x[(c,s)] for c in graph.g.graph["majors"]["electives"][major_pref]) == 1)
+    model.Add(sum(x[(c,s)] for c in graph.g.graph["majors"]["electives"][major_pref]) <= 1)
 
 #Hard Constraint 7(Co-requisites)
 for u,v,data in graph.g.edges(data= True):
@@ -160,6 +160,7 @@ imbalance = 3*sum(day_diff_vars)
 
 model.Minimize(penalty_workload + penalty_timings + penalty_gaps + imbalance)
 solver = cp_model.CpSolver()
+solver.parameters.max_time_in_seconds = 10
 solver.Solve(model)
 #store baseline solution
 x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
@@ -172,7 +173,7 @@ def perf_feas():
 def ext_feas():
     ans = input("Did any course become unavailable")
     if ans in ("YES","Yes","yes","yea","yeah"):
-        n = input("How many courses became unavailable?")
+        n = int(input("How many courses became unavailable?"))
         affected_semesters = []
         for _ in range(n):
             c = input("Course name[CAPS]: ")
@@ -213,12 +214,11 @@ if p or e:
     semester_credits = {}
     for s in semesters_list:
         semester_credits[s] = sum(x[(c,s)]*graph.g.nodes[c]["credits"] for c in courses_list)
-    E = {}
+    
     for s in semesters_list:
-        E[s] = robust_model.NewIntVar(0,15,f"epsilon_{s}")
-        robust_model.Add(semester_credits[s] <= max_credits + E[s])
-        robust_model.Add(semester_credits[s] >= min_credits - E[s])
-    epsilon = sum(E.values())*0.8
+        robust_model.Add(semester_credits[s] <= max_credits)
+        robust_model.Add(semester_credits[s] >= min_credits)
+    
 
     #Hard Constraint 4(prerequisites)
     for u,v,data in graph.g.edges(data = True):
@@ -236,7 +236,7 @@ if p or e:
     for s in range(5,9):
         robust_model.Add(sum(x[(c,s)] for c in graph.g.graph["open_electives"]) <= 1)
     for s in range(5,9):
-        robust_model.Add(sum(x[(c,s)] for c in graph.g.graph["majors"]["electives"][major_pref]) == 1)
+        robust_model.Add(sum(x[(c,s)] for c in graph.g.graph["majors"]["electives"][major_pref]) <= 1)
 
     #Hard Constraint 7(Co-requisites)
     for u,v,data in graph.g.edges(data= True):
@@ -356,8 +356,7 @@ if p or e:
     penalty_stability = sum((9 - s)*delta[(c, s)]for c in courses_list for s in semesters_list)
 
     robust_model.Minimize(penalty_workload + penalty_timings + penalty_gaps + imbalance 
-                          + penalty_stability 
-                          + epsilon)
+                          + penalty_stability )
     
     #Pareto Solutions
     class ParetoCallback(cp_model.CpSolverSolutionCallback):
@@ -376,7 +375,7 @@ if p or e:
             }
             self.solutions.append((obj_vals, assignment))
 
-    robust_objectives = [penalty_workload,penalty_timings,penalty_gaps,imbalance,penalty_stability,epsilon]
+    robust_objectives = [penalty_workload,penalty_timings,penalty_gaps,imbalance,penalty_stability]
     robust_callback = ParetoCallback(robust_objectives,x)
     robust_solver = cp_model.CpSolver()
     robust_solver.parameters.enumerate_all_solutions = True

@@ -274,12 +274,11 @@ if p or e:
     semester_credits = {}
     for s in semesters_list:
         semester_credits[s] = sum(x[(c,s)] * int(credits_dict[c]) for c in courses_list)
-    E = {}
+    
     for s in semesters_list:
-        E[s] = robust_model.NewIntVar(0,15,f"epsilon_{s}")
-        robust_model.Add(semester_credits[s] <= max_credits + E[s])
-        robust_model.Add(semester_credits[s] >= min_credits - E[s])
-    epsilon = sum(E.values())
+        robust_model.Add(semester_credits[s] <= max_credits)
+        robust_model.Add(semester_credits[s] >= min_credits)
+    
 
     #Hard Constraint 4(prerequisites)
     new_df = df[df["prerequisites"] != "NONE"]
@@ -474,8 +473,7 @@ if p or e:
     penalty_stability = sum((9 - s)*delta[(c, s)]for c in courses_list for s in semesters_list)
 
     robust_model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance 
-                          + penalty_stability 
-                          + epsilon)
+                          + penalty_stability)
     
     #Pareto Solutions
     class ParetoCallback(cp_model.CpSolverSolutionCallback):
@@ -494,7 +492,7 @@ if p or e:
             }
             self.solutions.append((obj_vals, assignment))
 
-    robust_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance,penalty_stability,epsilon]
+    robust_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance,penalty_stability]
     robust_callback = ParetoCallback(robust_objectives,x)
     robust_solver = cp_model.CpSolver()
     robust_solver.parameters.enumerate_all_solutions = True
