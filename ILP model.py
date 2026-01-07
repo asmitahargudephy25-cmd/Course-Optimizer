@@ -2,6 +2,7 @@ import pandas as pd
 df = pd.read_csv("course_catalog.csv")
 courses_list = df["course_name"].to_list()
 semesters_list = [1,2,3,4,5,6,7,8]
+current_semester = min(semesters_list)
 credits_dict = df.set_index("course_name")["credits"].to_dict()
 
 max_credits = int(input("Enter max credits:"))
@@ -100,7 +101,7 @@ for a, b in product(courses_list, repeat=2):
                     for s in semesters_list:
                         model.Add(x[(a, s)] + x[(b, s)] <= 1)
 
-#Hard Constraint 5(Electives)
+#Hard Constraint 6(Electives)
 eldf = pd.read_csv("electives_catalog.csv")
 
 for s in range(5,9):
@@ -108,7 +109,7 @@ for s in range(5,9):
 for s in range(5,9):
     model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
 
-#Hard Constraint 6(Co-requisites)
+#Hard Constraint 7(Co-requisites)
 for c in courses_list:
     for s in semesters_list:
             must = df[df["course_name"] == c]["corequisites"].values[0].split("|")
@@ -118,7 +119,7 @@ for c in courses_list:
                 else:
                     model.Add(x[(m,s)] >= x[(c,s)])
 
-#Hard Constraint 7(Semester Availabilty)
+#Hard Constraint 8(Semester Availabilty)
 sem_aval_list = df["semesters_available"].to_list()
 for i, each in enumerate(sem_aval_list):
     sem_aval_list[i] = [int(s) for s in str(each).split("|")]
@@ -233,8 +234,8 @@ def perf_feas():
         return True
     return False
 def ext_feas():
-    ans = input("Did any course become unavailable")
-    if ans.lower() in {"YES","Yes","yes","yea","yeah"}:
+    ans = int(input("Did any course become unavailable"))
+    if ans in ("YES","Yes","yes","yea","yeah"):
         n = input("How many courses became unavailable?")
         affected_semesters = []
         for _ in range(n):
@@ -248,7 +249,11 @@ def ext_feas():
         return True
     return False
 
-if perf_feas() is True or ext_feas() is True:
+p = perf_feas()
+
+e = ext_feas()
+
+if p or e:
     #model for reoptmization
     robust_model = cp_model.CpModel()
 
@@ -263,13 +268,6 @@ if perf_feas() is True or ext_feas() is True:
         robust_model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
 
     #Hard Constraint 2(required courses for a particular major must be taken exactly once)
-    df2 = pd.read_csv("major_requirements.csv")
-    majors_list = df2["major"].to_list()
-    for index,value in enumerate(majors_list):
-        print(index +1,value)
-    q = int(input("your selected option is:"))
-    major_pref = majors_list[q-1]
-
     req_string = str(df2[df2["major"] == major_pref]["required_courses"].values[0])
     for c in req_string.split("_") :
         robust_model.Add(sum(x[(c,s)] for s in semesters_list) == 1)
@@ -469,7 +467,7 @@ if perf_feas() is True or ext_feas() is True:
     #Robust model requirements
     for c in courses_list:
         for s in semesters_list:
-            if s < current_semester:
+            if int(s) < int(current_semester):
                 robust_model.Add(x[(c, s)] == x0[(c,s)])
 
 
@@ -509,7 +507,7 @@ if perf_feas() is True or ext_feas() is True:
     robust_solver.parameters.enumerate_all_solutions = True
     robust_solver.parameters.max_time_in_seconds = 15
     
-    solver.Solve(robust_model, robust_callback)
+    robust_solver.Solve(robust_model, robust_callback)
 
     def is_dominated(sol, others):
         return any(
@@ -532,49 +530,50 @@ if perf_feas() is True or ext_feas() is True:
                 print(f"Semester {s}: {courses}")
         print("*" * 40)
 
-#Pareto Solutions
-class ParetoCallback(cp_model.CpSolverSolutionCallback):
-    def __init__(self, objectives, x_vars):
-        super().__init__()
-        self.objectives = objectives
-        self.x_vars = x_vars
-        self.solutions = []
+else:
+    #Pareto Solutions
+    class ParetoCallback(cp_model.CpSolverSolutionCallback):
+        def __init__(self, objectives, x_vars):
+            super().__init__()
+            self.objectives = objectives
+            self.x_vars = x_vars
+            self.solutions = []
 
-    def OnSolutionCallback(self):
-        obj_vals = tuple(self.Value(o) for o in self.objectives)
-        assignment = {
-            (c, s): 1
-            for (c, s), v in self.x_vars.items()
-            if self.Value(v) == 1
-        }
-        self.solutions.append((obj_vals, assignment))
-baseline_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance]
-baseline_callback = ParetoCallback(baseline_objectives,x)
-baseline_solver = cp_model.CpSolver()
-baseline_solver.parameters.enumerate_all_solutions = True
-baseline_solver.parameters.max_time_in_seconds = 15
-solver.Solve(model, baseline_callback)
+        def OnSolutionCallback(self):
+            obj_vals = tuple(self.Value(o) for o in self.objectives)
+            assignment = {
+                (c, s): 1
+                for (c, s), v in self.x_vars.items()
+                if self.Value(v) == 1
+            }
+            self.solutions.append((obj_vals, assignment))
+    baseline_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance]
+    baseline_callback = ParetoCallback(baseline_objectives,x)
+    baseline_solver = cp_model.CpSolver()
+    baseline_solver.parameters.enumerate_all_solutions = True
+    baseline_solver.parameters.max_time_in_seconds = 15
+    solver.Solve(model, baseline_callback)
 
-def is_dominated(sol, others):
-    return any(
-        all(o <= s for o, s in zip(other[0], sol[0])) and
-        any(o < s for o, s in zip(other[0], sol[0]))
-        for other in others
-    )
+    def is_dominated(sol, others):
+        return any(
+            all(o <= s for o, s in zip(other[0], sol[0])) and
+            any(o < s for o, s in zip(other[0], sol[0]))
+            for other in others
+        )
 
-pareto_solutions = [
-    sol for sol in baseline_callback.solutions
-    if not is_dominated(sol, baseline_callback.solutions)
-]
+    pareto_solutions = [
+        sol for sol in baseline_callback.solutions
+        if not is_dominated(sol, baseline_callback.solutions)
+    ]
 
-for i, (obj, assign) in enumerate(pareto_solutions, 1):
-    print(f"Solution {i}")
-    print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
-    for s in semesters_list:
-        courses = [c for (c, sem) in assign if sem == s]
-        if courses:
-            print(f"Semester {s}: {courses}")
-    print("*" * 40)
+    for i, (obj, assign) in enumerate(pareto_solutions, 1):
+        print(f"Solution {i}")
+        print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
+        for s in semesters_list:
+            courses = [c for (c, sem) in assign if sem == s]
+            if courses:
+                print(f"Semester {s}: {courses}")
+        print("*" * 40)
 
 
 

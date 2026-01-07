@@ -5,6 +5,7 @@ from graph_builder import graph
 
 courses_list = list(graph.g.nodes)
 semesters_list = [1,2,3,4,5,6,7,8]
+current_semester = min(semesters_list)
 
 #building model
 model = cp_model.CpModel()
@@ -170,7 +171,7 @@ def perf_feas():
     return False
 def ext_feas():
     ans = input("Did any course become unavailable")
-    if ans.lower() in {"YES","Yes","yes","yea","yeah"}:
+    if ans in ("YES","Yes","yes","yea","yeah"):
         n = input("How many courses became unavailable?")
         affected_semesters = []
         for _ in range(n):
@@ -184,7 +185,10 @@ def ext_feas():
         return True
     return False
 
-if perf_feas() is True or ext_feas() is True:
+p = perf_feas()
+e = ext_feas()
+
+if p or e:
     #model for reoptmization
     robust_model = cp_model.CpModel()
 
@@ -378,7 +382,7 @@ if perf_feas() is True or ext_feas() is True:
     robust_solver.parameters.enumerate_all_solutions = True
     robust_solver.parameters.max_time_in_seconds = 15
     
-    solver.Solve(robust_model, robust_callback)
+    robust_solver.Solve(robust_model, robust_callback)
 
     def is_dominated(sol, others):
         return any(
