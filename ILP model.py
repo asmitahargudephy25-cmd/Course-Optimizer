@@ -24,8 +24,17 @@ for c in courses_list:
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:
     model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
+min_courses_per_sem = 3
+max_courses_per_sem = 6  
+
 for s in semesters_list:
-    model.Add(sum(x[(c,s)] for c in courses_list) >= 3)
+    model.Add(sum(x[(c,s)] for c in courses_list) >= min_courses_per_sem)
+    model.Add(sum(x[(c,s)] for c in courses_list) <= max_courses_per_sem)
+
+import random
+extra_semesters = random.sample(semesters_list, 2)
+for s in extra_semesters:
+    model.Add(sum(x[(c, s)] for c in courses_list) >= 4)
 
 #Hard Constraint 2(required courses for a particular major must be taken exactly once)
 df2 = pd.read_csv("major_requirements.csv")
@@ -139,8 +148,8 @@ workload = {}
 for s in semesters_list:
     workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
 avg = model.NewIntVar(0, 1000, "avg_workload")
-model.Add(avg * len(semesters_list) >= sum(workload.values()) - 7)
-model.Add(avg * len(semesters_list) <= sum(workload.values()) + 7)
+model.Add(avg * len(semesters_list) >= sum(workload.values()) - 50)
+model.Add(avg * len(semesters_list) <= sum(workload.values()) + 50)
 
 devs = []
 for s in semesters_list:
@@ -230,6 +239,14 @@ for s in semesters_list:
 imbalance = model.NewIntVar(0, 10_000_000, "imbalance")
 model.Add(imbalance == sum(day_diff_vars))
 
+#5. Irregularity
+extra_course_bonus = []
+for s in semesters_list:
+    num_courses = sum(x[(c,s)] for c in courses_list)
+    extra = model.NewIntVar(0, 2, f"extra_courses_s{s}")
+    model.Add(extra == num_courses - 3)
+    extra_course_bonus.append(extra)
+penalty_irregularity = sum(extra_course_bonus)
 
 solver = cp_model.CpSolver()
 solver.Solve(model)
@@ -275,8 +292,17 @@ if perf or ext:
     #Hard Constraint 1(each course must be taken atmost once)
     for c in courses_list:
         robust_model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
+    min_courses_per_sem = 3
+    max_courses_per_sem = 6 
+
     for s in semesters_list:
-        robust_model.Add(sum(x[(c,s)] for c in courses_list) >= 3)
+        robust_model.Add(sum(x[(c,s)] for c in courses_list) >= min_courses_per_sem)
+        robust_model.Add(sum(x[(c,s)] for c in courses_list) <= max_courses_per_sem)
+    
+    import random
+    extra_semesters = random.sample(semesters_list, 2)
+    for s in extra_semesters:
+        model.Add(sum(x[(c, s)] for c in courses_list) >= 4)
 
     #Hard Constraint 2(required courses for a particular major must be taken exactly once)
     req_string = str(df2[df2["major"] == major_pref]["required_courses"].values[0])
@@ -387,8 +413,8 @@ if perf or ext:
     for s in semesters_list:
         workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
     avg = robust_model.NewIntVar(0, 1000, "avg_workload")
-    robust_model.Add(avg * len(semesters_list) >= sum(workload.values()) - 7)
-    robust_model.Add(avg * len(semesters_list) <= sum(workload.values()) + 7)
+    robust_model.Add(avg * len(semesters_list) >= sum(workload.values()) - 50)
+    robust_model.Add(avg * len(semesters_list) <= sum(workload.values()) + 50)
 
     devs = []
     for s in semesters_list:
@@ -494,13 +520,22 @@ if perf or ext:
     penalty_stability = robust_model.NewIntVar(0, 10_000_000, "penalty_stability")
     robust_model.Add(penalty_stability == sum((9 - s) * delta[(c, s)] for c in courses_list for s in semesters_list))
 
-    robust_model.Minimize(
-    1000*penalty_workload +
-    500*penalty_timings +
-    200*penalty_gaps +
-    100*imbalance +
-    50*penalty_stability
-)
+    #5. Irregularity
+    extra_course_bonus = []
+    for s in semesters_list:
+        num_courses = sum(x[(c,s)] for c in courses_list)
+        extra = robust_model.NewIntVar(0, 2, f"extra_courses_s{s}")
+        robust_model.Add(extra == num_courses - 3)
+        extra_course_bonus.append(extra)
+    penalty_irregularity = sum(extra_course_bonus)
+
+    model.Minimize(
+        800*penalty_workload +
+        500*penalty_timings +
+        200*penalty_gaps +
+        100*imbalance -
+        500*penalty_irregularity   
+    )
     robust_solver = cp_model.CpSolver()
     robust_solver.parameters.max_time_in_seconds = 5
     robust_solver.parameters.num_search_workers = 8
@@ -532,38 +567,29 @@ if perf or ext:
 
 
 else:
+    model.Minimize(
+        800*penalty_workload +
+        500*penalty_timings +
+        200*penalty_gaps +
+        100*imbalance -
+        500*penalty_irregularity   
+    )
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 5
     solver.parameters.num_search_workers = 8
 
-    model.Minimize(penalty_workload)
-    solver.Solve(model)
-    best_workload = solver.Value(penalty_workload)
-    model.Add(penalty_workload == best_workload)
+    status = solver.Solve(model)
 
-    model.Minimize(penalty_timings)
-    solver.Solve(model)
-    best_timings = solver.Value(penalty_timings)
-    model.Add(penalty_timings == best_timings)
-
-    model.Minimize(penalty_gaps)
-    solver.Solve(model)
-    best_gaps = solver.Value(penalty_gaps)
-    model.Add(penalty_gaps == best_gaps)
-
-    model.Minimize(imbalance)
-    solver.Solve(model)
-    best_imbalance = solver.Value(imbalance)
-    model.Add(imbalance == best_imbalance)
-
-    solver.Solve(model)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        print("Baseline model infeasible")
+        exit()
 
     print("Baseline Solution")
     print(
-        f"workload={best_workload} "
-        f"timing={best_timings} "
-        f"gaps={best_gaps} "
-        f"imbalance={best_imbalance}"
+        f"workload={solver.Value(penalty_workload)} "
+        f"timings={solver.Value(penalty_timings)} "
+        f"gaps={solver.Value(penalty_gaps)} "
+        f"imbalance={solver.Value(imbalance)}"
     )
 
     for s in semesters_list:
