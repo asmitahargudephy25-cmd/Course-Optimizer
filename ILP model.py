@@ -1,8 +1,9 @@
 import pandas as pd
+import time
 df = pd.read_csv("course_catalog.csv")
 courses_list = df["course_name"].to_list()
 semesters_list = [1,2,3,4,5,6,7,8]
-difficulty = df.set_index("course_name")["difficulty"].to_dict()
+difficulty = df.set_index("course_name")["difficulty"].astype(int).to_dict()
 current_semester = min(semesters_list)
 credits_dict = df.set_index("course_name")["credits"].to_dict()
 
@@ -23,6 +24,8 @@ for c in courses_list:
 #Hard Constraint 1(each course must be taken atmost once)
 for c in courses_list:
     model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
+for s in semesters_list:
+    model.Add(sum(x[(c,s)] for c in courses_list) >= 3)
 
 #Hard Constraint 2(required courses for a particular major must be taken exactly once)
 df2 = pd.read_csv("major_requirements.csv")
@@ -106,9 +109,9 @@ for a, b in product(courses_list, repeat=2):
 eldf = pd.read_csv("electives_catalog.csv")
 
 for s in range(5,9):
-    model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) == 1)
+    model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) <= 1)
 for s in range(5,9):
-    model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
+    model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) <= 1)
 
 #Hard Constraint 7(Co-requisites)
 for c in courses_list:
@@ -135,15 +138,19 @@ for c in courses_list:
 workload = {}
 for s in semesters_list:
     workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
-diff = {}
-for i in semesters_list:
-    for j in semesters_list:
-        if i < j:
-            d = model.NewIntVar(0, 50, f"diff_{i}_{j}")
-            diff[(i,j)] = d
-            model.Add(d >= workload[i] - workload[j])
-            model.Add(d >= workload[j] - workload[i])
-penalty_workload = 15*sum(diff.values())
+avg = model.NewIntVar(0, 1000, "avg_workload")
+model.Add(avg * len(semesters_list) >= sum(workload.values()) - 7)
+model.Add(avg * len(semesters_list) <= sum(workload.values()) + 7)
+
+devs = []
+for s in semesters_list:
+    d = model.NewIntVar(0, 1000, f"dev_{s}")
+    model.Add(d >= workload[s] - avg)
+    model.Add(d >= avg - workload[s])
+    devs.append(d)
+
+penalty_workload = model.NewIntVar(0, 10_000_000, "penalty_workload")
+model.Add(penalty_workload == sum(devs))
 
 
 
@@ -162,7 +169,8 @@ penalty_eve = sum(x[(c, s)]*7 for s in semesters_list
                               for b in range(3)
                               if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
 
-penalty_timimgs = penalty_morn + penalty_eve
+penalty_timings = model.NewIntVar(0, 10_000_000, "penalty_timings")
+model.Add(penalty_timings == penalty_morn + penalty_eve)
 
 #3.Minimize gaps
 slots = []
@@ -198,7 +206,8 @@ for day, items in day_slots.items():
                 gap_penalty_vars.append(gap * g)
 
 
-penalty_gaps = 5*sum(gap_penalty_vars)
+penalty_gaps = model.NewIntVar(0, 10_000_000, "penalty_gaps")
+model.Add(penalty_gaps == sum(gap_penalty_vars))
 
 
 #4.Fairness Imbalance
@@ -218,9 +227,10 @@ for s in semesters_list:
             model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
             day_diff_vars.append(d)
     
-imbalance = 3*sum(day_diff_vars)
+imbalance = model.NewIntVar(0, 10_000_000, "imbalance")
+model.Add(imbalance == sum(day_diff_vars))
 
-model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance)
+
 solver = cp_model.CpSolver()
 solver.Solve(model)
 #store baseline solution
@@ -228,7 +238,7 @@ x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_lis
 
 #triggers for reoptimization
 def perf_feas():
-    if solver.Value(penalty_workload)>500 or solver.Value(penalty_timimgs)>500 or solver.Value(penalty_gaps)>500 or solver.Value(imbalance)>500:
+    if solver.Value(penalty_workload)>10000 or solver.Value(penalty_timings)>10000 or solver.Value(penalty_gaps)>10000 or solver.Value(imbalance)>10000:
         return True
     return False
 def ext_feas():
@@ -247,11 +257,12 @@ def ext_feas():
         return True
     return False
 
-p = perf_feas()
+perf = perf_feas()
 
-e = ext_feas()
+ext = ext_feas()
 
-if p or e:
+if perf or ext:
+    print("Reoptimization triggered:", perf or ext)
     #model for reoptmization
     robust_model = cp_model.CpModel()
 
@@ -264,6 +275,8 @@ if p or e:
     #Hard Constraint 1(each course must be taken atmost once)
     for c in courses_list:
         robust_model.Add(sum(x[(c,s)] for s in semesters_list) <= 1)
+    for s in semesters_list:
+        robust_model.Add(sum(x[(c,s)] for c in courses_list) >= 3)
 
     #Hard Constraint 2(required courses for a particular major must be taken exactly once)
     req_string = str(df2[df2["major"] == major_pref]["required_courses"].values[0])
@@ -338,15 +351,15 @@ if p or e:
                         for s in semesters_list:
                             robust_model.Add(x[(a, s)] + x[(b, s)] <= 1)
 
-    #Hard Constraint 5(Electives)
+    #Hard Constraint 6(Electives)
     eldf = pd.read_csv("electives_catalog.csv")
 
     for s in range(5,9):
-        robust_model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) == 1)
+        robust_model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) <= 1)
     for s in range(5,9):
-        robust_model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) == 1)
+        robust_model.Add(sum(x[(c,s)] for c in eldf[major_pref].to_list()) <= 1)
 
-    #Hard Constraint 6(Co-requisites)
+    #Hard Constraint 7(Co-requisites)
     for c in courses_list:
         for s in semesters_list:
                 must = df[df["course_name"] == c]["corequisites"].values[0].split("|")
@@ -356,7 +369,7 @@ if p or e:
                     else:
                         robust_model.Add(x[(m,s)] >= x[(c,s)])
 
-    #Hard Constraint 7(Semester Availabilty)
+    #Hard Constraint 8(Semester Availabilty)
     sem_aval_list = df["semesters_available"].to_list()
     for i, each in enumerate(sem_aval_list):
         sem_aval_list[i] = [int(s) for s in str(each).split("|")]
@@ -373,15 +386,20 @@ if p or e:
     workload = {}
     for s in semesters_list:
         workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
-    diff = {}
-    for i in semesters_list:
-        for j in semesters_list:
-            if i < j:
-                d = robust_model.NewIntVar(0, 50, f"diff_{i}_{j}")
-                diff[(i,j)] = d
-                robust_model.Add(d >= workload[i] - workload[j])
-                robust_model.Add(d >= workload[j] - workload[i])
-    penalty_workload = 15*sum(diff.values())
+    avg = robust_model.NewIntVar(0, 1000, "avg_workload")
+    robust_model.Add(avg * len(semesters_list) >= sum(workload.values()) - 7)
+    robust_model.Add(avg * len(semesters_list) <= sum(workload.values()) + 7)
+
+    devs = []
+    for s in semesters_list:
+        d = robust_model.NewIntVar(0, 1000, f"dev_{s}")
+        robust_model.Add(d >= workload[s] - avg)
+        robust_model.Add(d >= avg - workload[s])
+        devs.append(d)
+
+    penalty_workload = robust_model.NewIntVar(0, 10_000_000, "penalty_workload")
+    robust_model.Add(penalty_workload == sum(devs))
+
 
     #2a.Morning classes(before 10)
     penalty_morn = sum(x[(c, s)]*10 for s in semesters_list
@@ -398,7 +416,8 @@ if p or e:
                                  for b in range(3)
                                  if y[c][a][b][1] != None and int(y[c][a][b][1]) >= 17)
 
-    penalty_timimgs = penalty_morn + penalty_eve
+    penalty_timings = robust_model.NewIntVar(0, 10_000_000, "penalty_timings")
+    robust_model.Add(penalty_timings == penalty_morn + penalty_eve)
 
     #3.Minimize gaps
     slots = []
@@ -434,7 +453,8 @@ if p or e:
                     gap_penalty_vars.append(gap * g)
 
 
-    penalty_gaps = 5*sum(gap_penalty_vars)
+    penalty_gaps = robust_model.NewIntVar(0, 10_000_000, "penalty_gaps")
+    robust_model.Add(penalty_gaps ==  sum(gap_penalty_vars))
 
 
     #4.Fairness Imbalance
@@ -454,12 +474,13 @@ if p or e:
                 robust_model.Add(d >= day_workload[days[j]] - day_workload[days[i]])
                 day_diff_vars.append(d)
         
-    imbalance = 3*sum(day_diff_vars)
+    imbalance = robust_model.NewIntVar(0, 10_000_000, "imbalance")
+    robust_model.Add(imbalance == sum(day_diff_vars))
 
     #Robust model requirements
     for c in courses_list:
         for s in semesters_list:
-            if int(s) < int(current_semester):
+            if int(s) < int(current_semester) and x0[(c,s)] == 1:
                 robust_model.Add(x[(c, s)] == x0[(c,s)])
 
 
@@ -470,101 +491,88 @@ if p or e:
             delta[(c,s)] = robust_model.NewIntVar(0,6,f"delta_{c}_{s}")
             robust_model.Add(delta[(c,s)] >= x[(c,s)] - x0[(c,s)])
             robust_model.Add(delta[(c,s)] >= x0[(c,s)] - x[(c,s)])
-    penalty_stability = sum((9 - s)*delta[(c, s)]for c in courses_list for s in semesters_list)
+    penalty_stability = robust_model.NewIntVar(0, 10_000_000, "penalty_stability")
+    robust_model.Add(penalty_stability == sum((9 - s) * delta[(c, s)] for c in courses_list for s in semesters_list))
 
-    robust_model.Minimize(penalty_workload + penalty_timimgs + penalty_gaps + imbalance 
-                          + penalty_stability)
-    
-    #Pareto Solutions
-    class ParetoCallback(cp_model.CpSolverSolutionCallback):
-        def __init__(self, objectives, x_vars):
-            super().__init__()
-            self.objectives = objectives
-            self.x_vars = x_vars
-            self.solutions = []
-
-        def OnSolutionCallback(self):
-            obj_vals = tuple(self.Value(o) for o in self.objectives)
-            assignment = {
-                (c, s): 1
-                for (c, s), v in self.x_vars.items()
-                if self.Value(v) == 1
-            }
-            self.solutions.append((obj_vals, assignment))
-
-    robust_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance,penalty_stability]
-    robust_callback = ParetoCallback(robust_objectives,x)
+    robust_model.Minimize(
+    1000*penalty_workload +
+    500*penalty_timings +
+    200*penalty_gaps +
+    100*imbalance +
+    50*penalty_stability
+)
     robust_solver = cp_model.CpSolver()
-    robust_solver.parameters.enumerate_all_solutions = True
-    robust_solver.parameters.max_time_in_seconds = 15
-    
-    robust_solver.Solve(robust_model, robust_callback)
+    robust_solver.parameters.max_time_in_seconds = 5
+    robust_solver.parameters.num_search_workers = 8
 
-    def is_dominated(sol, others):
-        return any(
-            all(o <= s for o, s in zip(other[0], sol[0])) and
-            any(o < s for o, s in zip(other[0], sol[0]))
-            for other in others
-        )
+    status = robust_solver.Solve(robust_model)
 
-    pareto_solutions = [
-        sol for sol in robust_callback.solutions
-        if not is_dominated(sol, robust_callback.solutions)
-    ]
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        print("Robust model infeasible")
+        exit()
 
-    for i, (obj, assign) in enumerate(pareto_solutions, 1):
-        print(f"Solution {i}")
-        print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
-        for s in semesters_list:
-            courses = [c for (c, sem) in assign if sem == s]
-            if courses:
-                print(f"Semester {s}: {courses}")
-        print("*" * 40)
+    print("Robust Solution")
+    print(
+        f"workload={robust_solver.Value(penalty_workload)} "
+        f"timing={robust_solver.Value(penalty_timings)} "
+        f"gaps={robust_solver.Value(penalty_gaps)} "
+        f"imbalance={robust_solver.Value(imbalance)}"
+    )
+
+    for s in semesters_list:
+        courses = [
+            c for (c, sem), v in x.items()
+            if sem == s and robust_solver.Value(v) == 1
+        ]
+        if courses:
+            print(f"Semester {s}: {courses}")
+
+
+
+
 
 else:
-    #Pareto Solutions
-    class ParetoCallback(cp_model.CpSolverSolutionCallback):
-        def __init__(self, objectives, x_vars):
-            super().__init__()
-            self.objectives = objectives
-            self.x_vars = x_vars
-            self.solutions = []
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 5
+    solver.parameters.num_search_workers = 8
 
-        def OnSolutionCallback(self):
-            obj_vals = tuple(self.Value(o) for o in self.objectives)
-            assignment = {
-                (c, s): 1
-                for (c, s), v in self.x_vars.items()
-                if self.Value(v) == 1
-            }
-            self.solutions.append((obj_vals, assignment))
-    baseline_objectives = [penalty_workload,penalty_timimgs,penalty_gaps,imbalance]
-    baseline_callback = ParetoCallback(baseline_objectives,x)
-    baseline_solver = cp_model.CpSolver()
-    baseline_solver.parameters.enumerate_all_solutions = True
-    baseline_solver.parameters.max_time_in_seconds = 15
-    solver.Solve(model, baseline_callback)
+    model.Minimize(penalty_workload)
+    solver.Solve(model)
+    best_workload = solver.Value(penalty_workload)
+    model.Add(penalty_workload == best_workload)
 
-    def is_dominated(sol, others):
-        return any(
-            all(o <= s for o, s in zip(other[0], sol[0])) and
-            any(o < s for o, s in zip(other[0], sol[0]))
-            for other in others
-        )
+    model.Minimize(penalty_timings)
+    solver.Solve(model)
+    best_timings = solver.Value(penalty_timings)
+    model.Add(penalty_timings == best_timings)
 
-    pareto_solutions = [
-        sol for sol in baseline_callback.solutions
-        if not is_dominated(sol, baseline_callback.solutions)
-    ]
+    model.Minimize(penalty_gaps)
+    solver.Solve(model)
+    best_gaps = solver.Value(penalty_gaps)
+    model.Add(penalty_gaps == best_gaps)
 
-    for i, (obj, assign) in enumerate(pareto_solutions, 1):
-        print(f"Solution {i}")
-        print(f"workload={obj[0]} timing={obj[1]} gaps={obj[2]} imbalance={obj[3]}")
-        for s in semesters_list:
-            courses = [c for (c, sem) in assign if sem == s]
-            if courses:
-                print(f"Semester {s}: {courses}")
-        print("*" * 40)
+    model.Minimize(imbalance)
+    solver.Solve(model)
+    best_imbalance = solver.Value(imbalance)
+    model.Add(imbalance == best_imbalance)
+
+    solver.Solve(model)
+
+    print("Baseline Solution")
+    print(
+        f"workload={best_workload} "
+        f"timing={best_timings} "
+        f"gaps={best_gaps} "
+        f"imbalance={best_imbalance}"
+    )
+
+    for s in semesters_list:
+        courses = [
+            c for (c, sem), v in x.items()
+            if sem == s and solver.Value(v) == 1
+        ]
+        if courses:
+            print(f"Semester {s}: {courses}")
 
 
 

@@ -171,9 +171,9 @@ def perf_feas():
         return True
     return False
 def ext_feas():
-    ans = input("Did any course become unavailable")
+    ans = input("Did any course become unavailable? : ")
     if ans in ("YES","Yes","yes","yea","yeah"):
-        n = int(input("How many courses became unavailable?"))
+        n = int(input("How many courses became unavailable? : "))
         affected_semesters = []
         for _ in range(n):
             c = input("Course name[CAPS]: ")
