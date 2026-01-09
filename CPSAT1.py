@@ -148,8 +148,8 @@ workload = {}
 for s in semesters_list:
     workload[s] = sum(x[(c, s)]*difficulty[c] for c in courses_list)
 avg = model.NewIntVar(0, 1000, "avg_workload")
-model.Add(avg * len(semesters_list) >= sum(workload.values()) - 50)
-model.Add(avg * len(semesters_list) <= sum(workload.values()) + 50)
+model.Add(avg * 8 >= sum(workload.values()) - 50)
+model.Add(avg * 8 <= sum(workload.values()) + 50)
 
 devs = []
 for s in semesters_list:
