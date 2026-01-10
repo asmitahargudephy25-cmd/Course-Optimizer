@@ -595,8 +595,7 @@ else:
     for s in semesters_list:
         courses = [
             c for (c, sem), v in x.items()
-            if sem == s and solver.Value(v) == 1
-        ]
+            if sem == s and solver.Value(v) == 1]
         if courses:
             print(f"Semester {s}: {courses}")
 
