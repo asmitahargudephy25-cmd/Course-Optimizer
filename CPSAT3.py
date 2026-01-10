@@ -507,7 +507,7 @@ if perf or ext:
     objective_vars = [penalty_workload,penalty_timings,penalty_gaps,imbalance,penalty_stability]
 
     pareto_points = []
-    K = 5
+    K = 8
 
     while len(pareto_points) < K:
         robust_solver = cp_model.CpSolver()

@@ -38,7 +38,7 @@ def course_conflict(G,c1,c2):
 
 class CourseGraphBuilder:
     def __init__(self):
-        self.g = nx.DiGraph()
+        self.g = nx.MultiDiGraph()
 
     def AddCourse(self,course,credits,prerequsites,corequisites,difficulty,semesters_avalaible,lecture,tutorial,practical):
         self.g.add_node(course,credits = credits,prerequsites = prerequsites, corequisites = corequisites,

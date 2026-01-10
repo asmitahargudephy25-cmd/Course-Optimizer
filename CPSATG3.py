@@ -8,6 +8,17 @@ courses_list = list(graph.g.nodes)
 semesters_list = [1,2,3,4,5,6,7,8]
 current_semester = min(semesters_list)
 
+def add_pareto_cut(model, obj_vars, obj_values):
+    literals = []
+
+    for var, val in zip(obj_vars, obj_values):
+        b = model.NewBoolVar(f"{var.Name()}_lt_{val}")
+        model.Add(var < val).OnlyEnforceIf(b)
+        model.Add(var >= val).OnlyEnforceIf(b.Not())
+        literals.append(b)
+
+    model.AddBoolOr(literals)
+
 #building model
 model = cp_model.CpModel()
 
@@ -176,9 +187,19 @@ for s in semesters_list:
 imbalance = model.NewIntVar(0, 10_000_000, "imbalance")
 model.Add(imbalance == sum(day_diff_vars))
 
+#5. Irregularity
+extra_course_bonus = []
+for s in semesters_list:
+    num_courses = sum(x[(c,s)] for c in courses_list)
+    extra = model.NewIntVar(0, 2, f"extra_courses_s{s}")
+    model.Add(extra == num_courses - 3)
+    extra_course_bonus.append(extra)
+penalty_irregularity = sum(extra_course_bonus)
+
 model.Minimize(penalty_workload + penalty_timings + penalty_gaps + imbalance)
 solver = cp_model.CpSolver()
-solver.parameters.max_time_in_seconds = 30
+solver.parameters.max_time_in_seconds = 30.0   
+solver.parameters.log_search_progress = True
 solver.Solve(model)
 #store baseline solution
 x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
@@ -377,6 +398,16 @@ if perf or ext:
     imbalance = robust_model.NewIntVar(0, 10_000_000, "imbalance")
     robust_model.Add(imbalance == sum(day_diff_vars))
 
+
+    #5. Irregularity
+    extra_course_bonus = []
+    for s in semesters_list:
+        num_courses = sum(x[(c,s)] for c in courses_list)
+        extra = robust_model.NewIntVar(0, 2, f"extra_courses_s{s}")
+        robust_model.Add(extra == num_courses - 3)
+        extra_course_bonus.append(extra)
+    penalty_irregularity = sum(extra_course_bonus)
+
     #Robust model requirements
     for c in courses_list:
         for s in semesters_list:
@@ -393,67 +424,58 @@ if perf or ext:
     penalty_stability = robust_model.NewIntVar(0, 10_000_000, "penalty_stability")
     robust_model.Add(penalty_stability == sum((9 - s)*delta[(c, s)] for c in courses_list for s in semesters_list))
 
-    model.Minimize(
-        800*penalty_workload +
-        500*penalty_timings +
-        200*penalty_gaps +
-        100*imbalance +
-        500*penalty_stability  
-    )
-    robust_solver = cp_model.CpSolver()
-    robust_solver.parameters.max_time_in_seconds = 5
-    robust_solver.parameters.num_search_workers = 8
+#Pareto enumeration
+    objective_vars = [penalty_workload,penalty_timings,penalty_gaps,imbalance,penalty_stability]
 
-    status = robust_solver.Solve(robust_model)
+    pareto_points = []
+    K = 5
 
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        print("Robust model infeasible")
-        exit()
+    while len(pareto_points) < K:
+        robust_solver = cp_model.CpSolver()
+        robust_solver.parameters.max_time_in_seconds = 5
+        status = robust_solver.Solve(robust_model)
 
-    print("Robust Solution")
-    print(
-        f"workload={robust_solver.Value(penalty_workload)} "
-        f"timing={robust_solver.Value(penalty_timings)} "
-        f"gaps={robust_solver.Value(penalty_gaps)} "
-        f"imbalance={robust_solver.Value(imbalance)}"
-    )
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            break
 
-    for s in semesters_list:
-        courses = [
-            c for (c, sem), v in x.items()
-            if sem == s and robust_solver.Value(v) == 1
-        ]
-        if courses:
-            print(f"Semester {s}: {courses}")
+        current_point = tuple(robust_solver.Value(v) for v in objective_vars)
+        if current_point in pareto_points:
+            print("Duplicate Pareto point detected")
+            break
+        pareto_points.append(current_point)
+
+        print(f"Pareto {len(pareto_points)}:", current_point)
+        for s in semesters_list:
+            courses = [c for (c, sem), v in x.items() if sem == s and robust_solver.Value(v) == 1]
+            if courses:
+                print(f"Semester {s}: {courses}")
+
+        add_pareto_cut(robust_model, objective_vars, current_point)
 
 else:
-    model.Minimize(
-        800*penalty_workload +
-        500*penalty_timings +
-        200*penalty_gaps +
-        100*imbalance   
-    )
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5
-    solver.parameters.num_search_workers = 8
+    objective_vars = [penalty_workload,penalty_timings,penalty_gaps,imbalance]
 
-    status = solver.Solve(model)
+    pareto_points = []
+    K = 8
 
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        print("Baseline model infeasible")
-        exit()
+    while len(pareto_points) < K:
+        solver2 = cp_model.CpSolver()
+        solver2.parameters.max_time_in_seconds = 5
+        status = solver2.Solve(model)
 
-    print("Baseline Solution")
-    print(
-        f"workload={solver.Value(penalty_workload)} "
-        f"timings={solver.Value(penalty_timings)} "
-        f"gaps={solver.Value(penalty_gaps)} "
-        f"imbalance={solver.Value(imbalance)}"
-    )
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            break
 
-    for s in semesters_list:
-        courses = [
-            c for (c, sem), v in x.items()
-            if sem == s and solver.Value(v) == 1]
-        if courses:
-            print(f"Semester {s}: {courses}")
+        current_point = tuple(solver2.Value(v) for v in objective_vars)
+        if current_point in pareto_points:
+            print("Duplicate Pareto point detected, stopping.")
+            break
+        pareto_points.append(current_point)
+
+        print(f"Pareto {len(pareto_points)}:", current_point)
+        for s in semesters_list:
+            courses = [c for (c, sem), v in x.items() if sem == s and solver2.Value(v) == 1]
+            if courses:
+                print(f"Semester {s}: {courses}")
+
+        add_pareto_cut(model, objective_vars, current_point)

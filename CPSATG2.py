@@ -176,9 +176,19 @@ for s in semesters_list:
 imbalance = model.NewIntVar(0, 10_000_000, "imbalance")
 model.Add(imbalance == sum(day_diff_vars))
 
+#5. Irregularity
+extra_course_bonus = []
+for s in semesters_list:
+    num_courses = sum(x[(c,s)] for c in courses_list)
+    extra = model.NewIntVar(0, 2, f"extra_courses_s{s}")
+    model.Add(extra == num_courses - 3)
+    extra_course_bonus.append(extra)
+penalty_irregularity = sum(extra_course_bonus)
+
 model.Minimize(penalty_workload + penalty_timings + penalty_gaps + imbalance)
 solver = cp_model.CpSolver()
-solver.parameters.max_time_in_seconds = 30
+solver.parameters.max_time_in_seconds = 30.0   
+solver.parameters.log_search_progress = True
 solver.Solve(model)
 #store baseline solution
 x0 = {(c,s): solver.Value(x[(c,s)]) for c in courses_list for s in semesters_list}
@@ -377,6 +387,16 @@ if perf or ext:
     imbalance = robust_model.NewIntVar(0, 10_000_000, "imbalance")
     robust_model.Add(imbalance == sum(day_diff_vars))
 
+
+    #5. Irregularity
+    extra_course_bonus = []
+    for s in semesters_list:
+        num_courses = sum(x[(c,s)] for c in courses_list)
+        extra = robust_model.NewIntVar(0, 2, f"extra_courses_s{s}")
+        robust_model.Add(extra == num_courses - 3)
+        extra_course_bonus.append(extra)
+    penalty_irregularity = sum(extra_course_bonus)
+
     #Robust model requirements
     for c in courses_list:
         for s in semesters_list:
@@ -393,17 +413,35 @@ if perf or ext:
     penalty_stability = robust_model.NewIntVar(0, 10_000_000, "penalty_stability")
     robust_model.Add(penalty_stability == sum((9 - s)*delta[(c, s)] for c in courses_list for s in semesters_list))
 
-    model.Minimize(
-        800*penalty_workload +
-        500*penalty_timings +
-        200*penalty_gaps +
-        100*imbalance +
-        500*penalty_stability  
-    )
     robust_solver = cp_model.CpSolver()
-    robust_solver.parameters.max_time_in_seconds = 5
-    robust_solver.parameters.num_search_workers = 8
 
+    robust_model.Minimize(800*penalty_workload)
+    robust_solver.parameters.max_time_in_seconds = 30
+    robust_solver.parameters.log_search_progress = True
+    robust_solver.Solve(robust_model)
+    robust_model.Add(penalty_workload == robust_solver.Value(penalty_workload))
+
+    robust_model.Minimize(500*penalty_timings)
+    robust_solver.parameters.max_time_in_seconds = 30
+    robust_solver.parameters.log_search_progress = True
+    robust_solver.Solve(robust_model)
+    robust_model.Add(penalty_timings == robust_solver.Value(penalty_timings))
+
+    robust_model.Maximize(500*penalty_irregularity)
+    robust_solver.parameters.max_time_in_seconds = 30
+    robust_solver.parameters.log_search_progress = True
+    robust_solver.Solve(robust_model)
+    robust_model.Add(penalty_irregularity == robust_solver.Value(penalty_irregularity))
+
+    robust_model.Minimize(200*penalty_gaps)
+    robust_solver.parameters.max_time_in_seconds = 30
+    robust_solver.parameters.log_search_progress = True
+    robust_solver.Solve(robust_model)
+    robust_model.Add(penalty_gaps == robust_solver.Value(penalty_gaps))
+
+    robust_model.Minimize(100*imbalance)
+    robust_solver.parameters.max_time_in_seconds = 30
+    robust_solver.parameters.log_search_progress = True
     status = robust_solver.Solve(robust_model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -427,17 +465,36 @@ if perf or ext:
             print(f"Semester {s}: {courses}")
 
 else:
-    model.Minimize(
-        800*penalty_workload +
-        500*penalty_timings +
-        200*penalty_gaps +
-        100*imbalance   
-    )
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5
-    solver.parameters.num_search_workers = 8
+    solver2 = cp_model.CpSolver()
 
-    status = solver.Solve(model)
+    model.Minimize(800*penalty_workload)
+    solver2.parameters.max_time_in_seconds = 30
+    solver2.parameters.log_search_progress = True
+    solver2.Solve(model)
+    model.Add(penalty_workload == solver2.Value(penalty_workload))
+
+    model.Minimize(500*penalty_timings)
+    solver2.parameters.max_time_in_seconds = 30
+    solver2.parameters.log_search_progress = True
+    solver2.Solve(model)
+    model.Add(penalty_timings== solver2.Value(penalty_timings))
+    
+    model.Maximize(500*penalty_irregularity)
+    solver2.parameters.max_time_in_seconds = 30
+    solver2.parameters.log_search_progress = True
+    solver2.Solve(model)
+    model.Add(penalty_irregularity==solver2.Value(penalty_irregularity))
+    
+    model.Minimize(200*penalty_gaps)
+    solver2.parameters.max_time_in_seconds = 30
+    solver2.parameters.log_search_progress = True
+    solver2.Solve(model)
+    model.Add(penalty_gaps == solver2.Value(penalty_gaps))
+
+    model.Minimize(100*imbalance)
+    solver2.parameters.max_time_in_seconds = 30
+    solver2.parameters.log_search_progress = True
+    status = solver2.Solve(model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print("Baseline model infeasible")
@@ -445,15 +502,16 @@ else:
 
     print("Baseline Solution")
     print(
-        f"workload={solver.Value(penalty_workload)} "
-        f"timings={solver.Value(penalty_timings)} "
-        f"gaps={solver.Value(penalty_gaps)} "
-        f"imbalance={solver.Value(imbalance)}"
+        f"workload={solver2.Value(penalty_workload)} "
+        f"timings={solver2.Value(penalty_timings)} "
+        f"gaps={solver2.Value(penalty_gaps)} "
+        f"imbalance={solver2.Value(imbalance)}"
     )
 
     for s in semesters_list:
         courses = [
             c for (c, sem), v in x.items()
-            if sem == s and solver.Value(v) == 1]
+            if sem == s and solver2.Value(v) == 1
+        ]
         if courses:
             print(f"Semester {s}: {courses}")

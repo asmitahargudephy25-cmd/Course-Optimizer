@@ -543,10 +543,6 @@ if perf or ext:
         if courses:
             print(f"Semester {s}: {courses}")
 
-
-
-
-
 else:
     solver2 = cp_model.CpSolver()
 

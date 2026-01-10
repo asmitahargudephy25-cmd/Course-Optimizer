@@ -161,8 +161,6 @@ for s in semesters_list:
 penalty_workload = model.NewIntVar(0, 10_000_000, "penalty_workload")
 model.Add(penalty_workload == sum(devs))
 
-
-
 #2a.Morning classes(before 10)
 penalty_morn = sum(x[(c, s)]*10 for s in semesters_list
                                 for c in courses_list 
@@ -238,15 +236,6 @@ for s in semesters_list:
     
 imbalance = model.NewIntVar(0, 10_000_000, "imbalance")
 model.Add(imbalance == sum(day_diff_vars))
-
-#5. Irregularity
-extra_course_bonus = []
-for s in semesters_list:
-    num_courses = sum(x[(c,s)] for c in courses_list)
-    extra = model.NewIntVar(0, 2, f"extra_courses_s{s}")
-    model.Add(extra == num_courses - 3)
-    extra_course_bonus.append(extra)
-penalty_irregularity = sum(extra_course_bonus)
 
 solver = cp_model.CpSolver()
 solver.Solve(model)
@@ -406,8 +395,6 @@ if perf or ext:
                 robust_model.Add(x[(c,s)] == 0)
 
 
-                        
-
     #1.Must Optimise objective(workload variance across all semesters):
     workload = {}
     for s in semesters_list:
@@ -520,21 +507,11 @@ if perf or ext:
     penalty_stability = robust_model.NewIntVar(0, 10_000_000, "penalty_stability")
     robust_model.Add(penalty_stability == sum((9 - s) * delta[(c, s)] for c in courses_list for s in semesters_list))
 
-    #5. Irregularity
-    extra_course_bonus = []
-    for s in semesters_list:
-        num_courses = sum(x[(c,s)] for c in courses_list)
-        extra = robust_model.NewIntVar(0, 2, f"extra_courses_s{s}")
-        robust_model.Add(extra == num_courses - 3)
-        extra_course_bonus.append(extra)
-    penalty_irregularity = sum(extra_course_bonus)
-
     model.Minimize(
         800*penalty_workload +
         500*penalty_timings +
         200*penalty_gaps +
-        100*imbalance -
-        500*penalty_irregularity   
+        100*imbalance   
     )
     robust_solver = cp_model.CpSolver()
     robust_solver.parameters.max_time_in_seconds = 5
@@ -562,17 +539,12 @@ if perf or ext:
         if courses:
             print(f"Semester {s}: {courses}")
 
-
-
-
-
 else:
     model.Minimize(
         800*penalty_workload +
         500*penalty_timings +
         200*penalty_gaps +
-        100*imbalance -
-        500*penalty_irregularity   
+        100*imbalance   
     )
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 5
