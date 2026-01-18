@@ -1,6 +1,12 @@
 # Course-Optimizer
 OVERVIEW-
 
+(6 CP-SAT solvers for optimized course scheduling)
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/) 
+[![OR-Tools](https://img.shields.io/badge/OR--Tools-CP--SAT-orange)](https://developers.google.com/optimization) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
 This project implements a constraint-based academic course planning system designed to generate valid, optimized multi-semester study plans under complex academic rules modeling real-world university constraints. The system represents academic constraints—including prerequisites, corequisites, time conflicts, credit limits, electives, and degree requirements—through two distinct modeling approaches: a pandas-based relational structure and a NetworkX-based graph formulation. The integrated planning problem is subsequently solved using Google OR-Tools CP-SAT under three optimization paradigms: multi-weighted objective functions, lexicographic optimization, and Pareto frontier enumeration.
 
 
@@ -38,7 +44,7 @@ Soft Constraints (Optimized)-
         b.Lexicographic optimization - Objectives are optimized in a strict priority order, ensuring higher-priority goals are satisfied before considering others.
         c.Pareto-front enumeration - The system enumerates Pareto-optimal solutions, exposing trade-offs between conflicting objectives.
 
-| File         | Modeling Strategy          | Best For              |
+| File         | Modeling |Strategy         | Best For              |
 | ------------ | -------- | --------------- | --------------------- |
 | CP_SAT_1.py  | Pandas   | Multi-weighted  | Balanced schedules    |
 | CP_SAT_2.py  | Pandas   | Lexicographic   | Strict priorities     |
@@ -58,6 +64,7 @@ QUICK START-
 Python 3.8+
 Google OR-Tools (pip install ortools)
 Pandas, NetworkX (pip install pandas networkx)
+pip install -r requirements.txt
 
 ARCHITECTURE-
 
@@ -65,12 +72,12 @@ __pycache__
 .venv
 .vscode
 
-CP_SAT/
+CP_SAT/ #Pandas Modeling
 |──CP_SAT_1.py(Multiweighted objective function)
 |──CP_SAT_2.py(Lexicographic optimization)
 |──CP_SAT_3.py(Pareto Optimization)
 
-CP_SAT_G/
+CP_SAT_G/ #NetworkX Graph
 |──CP_SAT_G1.py(Multiweighted objective function)
 |──CP_SAT_G2.py(Lexicographic optimization)
 |──CP_SAT_G3.py(Pareto Optimization)
@@ -110,6 +117,7 @@ These extensions are proposed directions for future exploration
 and are not currently implemented.
 
 CONTACT-
-Author : Asmita Hargude
+Author : Asmita Hargude 
+         Engineering Physics '25 IITBHU
 email : asmita.hargude.phy25@itbhu.ac.in
 linkedin : 

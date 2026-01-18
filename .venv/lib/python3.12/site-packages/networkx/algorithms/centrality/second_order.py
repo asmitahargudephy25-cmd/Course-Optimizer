@@ -39,7 +39,7 @@ __all__ = ["second_order_centrality"]
 
 
 @not_implemented_for("directed")
-@nx._dispatchable(edge_attrs="weight")
+@nx._dispatch(edge_attrs="weight")
 def second_order_centrality(G, weight="weight"):
     """Compute the second order centrality for nodes of G.
 
@@ -134,8 +134,5 @@ def second_order_centrality(G, weight="weight"):
         )  # eq 3
 
     return dict(
-        zip(
-            G.nodes,
-            (float(np.sqrt(2 * np.sum(M[:, i]) - n * (n + 1))) for i in range(n)),
-        )
+        zip(G.nodes, [np.sqrt(2 * np.sum(M[:, i]) - n * (n + 1)) for i in range(n)])
     )  # eq 6

@@ -1,7 +1,6 @@
 """
 Gomory-Hu tree of undirected Graphs.
 """
-
 import networkx as nx
 from networkx.utils import not_implemented_for
 
@@ -14,7 +13,7 @@ __all__ = ["gomory_hu_tree"]
 
 
 @not_implemented_for("directed")
-@nx._dispatchable(edge_attrs={"capacity": float("inf")}, returns_graph=True)
+@nx._dispatch(edge_attrs={"capacity": float("inf")})
 def gomory_hu_tree(G, capacity="capacity", flow_func=None):
     r"""Returns the Gomory-Hu tree of an undirected graph G.
 

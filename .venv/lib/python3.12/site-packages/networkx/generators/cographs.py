@@ -11,7 +11,6 @@ References
     Discrete Applied Mathematics, Volume 3, Issue 3, 1981, Pages 163-174,
     ISSN 0166-218X.
 """
-
 import networkx as nx
 from networkx.utils import py_random_state
 
@@ -19,7 +18,7 @@ __all__ = ["random_cograph"]
 
 
 @py_random_state(1)
-@nx._dispatchable(graphs=None, returns_graph=True)
+@nx._dispatch(graphs=None)
 def random_cograph(n, seed=None):
     r"""Returns a random cograph with $2 ^ n$ nodes.
 

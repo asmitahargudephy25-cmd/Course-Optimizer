@@ -9,7 +9,7 @@ __all__ = ["efficiency", "local_efficiency", "global_efficiency"]
 
 
 @not_implemented_for("directed")
-@nx._dispatchable
+@nx._dispatch
 def efficiency(G, u, v):
     """Returns the efficiency of a pair of nodes in a graph.
 
@@ -60,7 +60,7 @@ def efficiency(G, u, v):
 
 
 @not_implemented_for("directed")
-@nx._dispatchable
+@nx._dispatch
 def global_efficiency(G):
     """Returns the average global efficiency of the graph.
 
@@ -121,7 +121,7 @@ def global_efficiency(G):
 
 
 @not_implemented_for("directed")
-@nx._dispatchable
+@nx._dispatch
 def local_efficiency(G):
     """Returns the average local efficiency of the graph.
 
@@ -163,5 +163,6 @@ def local_efficiency(G):
            <https://doi.org/10.1103/PhysRevLett.87.198701>
 
     """
+    # TODO This summation can be trivially parallelized.
     efficiency_list = (global_efficiency(G.subgraph(G[v])) for v in G)
     return sum(efficiency_list) / len(G)

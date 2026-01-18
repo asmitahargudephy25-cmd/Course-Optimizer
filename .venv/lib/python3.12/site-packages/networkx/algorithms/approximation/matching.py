@@ -8,13 +8,12 @@ edges; that is, no two edges share a common vertex.
 
 `Wikipedia: Matching <https://en.wikipedia.org/wiki/Matching_(graph_theory)>`_
 """
-
 import networkx as nx
 
 __all__ = ["min_maximal_matching"]
 
 
-@nx._dispatchable
+@nx._dispatch
 def min_maximal_matching(G):
     r"""Returns the minimum maximal matching of G. That is, out of all maximal
     matchings of the graph G, the smallest is returned.

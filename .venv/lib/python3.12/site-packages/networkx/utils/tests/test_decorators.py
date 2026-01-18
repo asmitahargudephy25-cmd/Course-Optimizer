@@ -13,7 +13,7 @@ from networkx.utils.decorators import (
     open_file,
     py_random_state,
 )
-from networkx.utils.misc import PythonRandomInterface, PythonRandomViaNumpyBits
+from networkx.utils.misc import PythonRandomInterface
 
 
 def test_not_implemented_decorator():
@@ -212,19 +212,17 @@ class TestRandomState:
 
     @np_random_state(1)
     def instantiate_np_random_state(self, random_state):
-        allowed = (np.random.RandomState, np.random.Generator)
-        assert isinstance(random_state, allowed)
-        return random_state.random()
+        assert isinstance(random_state, np.random.RandomState)
+        return random_state.random_sample()
 
     @py_random_state(1)
     def instantiate_py_random_state(self, random_state):
-        allowed = (random.Random, PythonRandomInterface, PythonRandomViaNumpyBits)
-        assert isinstance(random_state, allowed)
+        assert isinstance(random_state, (random.Random, PythonRandomInterface))
         return random_state.random()
 
     def test_random_state_None(self):
         np.random.seed(42)
-        rv = np.random.random()
+        rv = np.random.random_sample()
         np.random.seed(42)
         assert rv == self.instantiate_np_random_state(None)
 
@@ -235,7 +233,7 @@ class TestRandomState:
 
     def test_random_state_np_random(self):
         np.random.seed(42)
-        rv = np.random.random()
+        rv = np.random.random_sample()
         np.random.seed(42)
         assert rv == self.instantiate_np_random_state(np.random)
         np.random.seed(42)
@@ -243,7 +241,7 @@ class TestRandomState:
 
     def test_random_state_int(self):
         np.random.seed(42)
-        np_rv = np.random.random()
+        np_rv = np.random.random_sample()
         random.seed(42)
         py_rv = random.random()
 
@@ -251,56 +249,39 @@ class TestRandomState:
         seed = 1
         rval = self.instantiate_np_random_state(seed)
         rval_expected = np.random.RandomState(seed).rand()
-        assert rval == rval_expected
+        assert rval, rval_expected
         # test that global seed wasn't changed in function
-        assert np_rv == np.random.random()
+        assert np_rv == np.random.random_sample()
 
         random.seed(42)
         rval = self.instantiate_py_random_state(seed)
         rval_expected = random.Random(seed).random()
-        assert rval == rval_expected
+        assert rval, rval_expected
         # test that global seed wasn't changed in function
         assert py_rv == random.random()
 
-    def test_random_state_np_random_Generator(self):
-        np.random.seed(42)
-        np_rv = np.random.random()
-        np.random.seed(42)
-        seed = 1
-
-        rng = np.random.default_rng(seed)
-        rval = self.instantiate_np_random_state(rng)
-        rval_expected = np.random.default_rng(seed).random()
-        assert rval == rval_expected
-
-        rval = self.instantiate_py_random_state(rng)
-        rval_expected = np.random.default_rng(seed).random(size=2)[1]
-        assert rval == rval_expected
-        # test that global seed wasn't changed in function
-        assert np_rv == np.random.random()
-
     def test_random_state_np_random_RandomState(self):
         np.random.seed(42)
-        np_rv = np.random.random()
+        np_rv = np.random.random_sample()
+
         np.random.seed(42)
         seed = 1
-
         rng = np.random.RandomState(seed)
-        rval = self.instantiate_np_random_state(rng)
-        rval_expected = np.random.RandomState(seed).random()
-        assert rval == rval_expected
+        rval = self.instantiate_np_random_state(seed)
+        rval_expected = np.random.RandomState(seed).rand()
+        assert rval, rval_expected
 
-        rval = self.instantiate_py_random_state(rng)
-        rval_expected = np.random.RandomState(seed).random(size=2)[1]
-        assert rval == rval_expected
+        rval = self.instantiate_py_random_state(seed)
+        rval_expected = np.random.RandomState(seed).rand()
+        assert rval, rval_expected
         # test that global seed wasn't changed in function
-        assert np_rv == np.random.random()
+        assert np_rv == np.random.random_sample()
 
     def test_random_state_py_random(self):
         seed = 1
         rng = random.Random(seed)
         rv = self.instantiate_py_random_state(rng)
-        assert rv == random.Random(seed).random()
+        assert rv, random.Random(seed).random()
 
         pytest.raises(ValueError, self.instantiate_np_random_state, rng)
 

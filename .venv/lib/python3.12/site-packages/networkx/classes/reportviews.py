@@ -82,8 +82,6 @@ EdgeDataView
 
     The argument `nbunch` restricts edges to those incident to nodes in nbunch.
 """
-
-from abc import ABC
 from collections.abc import Mapping, Set
 
 import networkx as nx
@@ -241,13 +239,11 @@ class NodeView(Mapping, Set):
         Examples
         --------
         >>> G = nx.Graph()
-        >>> G.add_nodes_from(
-        ...     [
-        ...         (0, {"color": "red", "weight": 10}),
-        ...         (1, {"color": "blue"}),
-        ...         (2, {"color": "yellow", "weight": 2}),
-        ...     ]
-        ... )
+        >>> G.add_nodes_from([
+        ...     (0, {"color": "red", "weight": 10}),
+        ...     (1, {"color": "blue"}),
+        ...     (2, {"color": "yellow", "weight": 2})
+        ... ])
 
         Accessing node data with ``data=True`` (the default) returns a
         NodeDataView mapping each node to all of its attributes:
@@ -736,15 +732,8 @@ class OutMultiDegreeView(DiDegreeView):
                 yield (n, deg)
 
 
-# A base class for all edge views. Ensures all edge view and edge data view
-# objects/classes are captured by `isinstance(obj, EdgeViewABC)` and
-# `issubclass(cls, EdgeViewABC)` respectively
-class EdgeViewABC(ABC):
-    pass
-
-
 # EdgeDataViews
-class OutEdgeDataView(EdgeViewABC):
+class OutEdgeDataView:
     """EdgeDataView for outward edges of DiGraph; See EdgeDataView"""
 
     __slots__ = (
@@ -1045,7 +1034,7 @@ class InMultiEdgeDataView(OutMultiEdgeDataView):
 
 
 # EdgeViews    have set operations and no data reported
-class OutEdgeView(Set, Mapping, EdgeViewABC):
+class OutEdgeView(Set, Mapping):
     """A EdgeView class for outward edges of a DiGraph"""
 
     __slots__ = ("_adjdict", "_graph", "_nodes_nbrs")
@@ -1093,10 +1082,7 @@ class OutEdgeView(Set, Mapping, EdgeViewABC):
                 f"try list(G.edges)[{e.start}:{e.stop}:{e.step}]"
             )
         u, v = e
-        try:
-            return self._adjdict[u][v]
-        except KeyError as ex:  # Customize msg to indicate exception origin
-            raise KeyError(f"The edge {e} is not in the graph.")
+        return self._adjdict[u][v]
 
     # EdgeDataView methods
     def __call__(self, nbunch=None, data=False, *, default=None):
@@ -1143,13 +1129,11 @@ class OutEdgeView(Set, Mapping, EdgeViewABC):
         Examples
         --------
         >>> G = nx.Graph()
-        >>> G.add_edges_from(
-        ...     [
-        ...         (0, 1, {"dist": 3, "capacity": 20}),
-        ...         (1, 2, {"dist": 4}),
-        ...         (2, 0, {"dist": 5}),
-        ...     ]
-        ... )
+        >>> G.add_edges_from([
+        ...     (0, 1, {"dist": 3, "capacity": 20}),
+        ...     (1, 2, {"dist": 4}),
+        ...     (2, 0, {"dist": 5})
+        ... ])
 
         Accessing edge data with ``data=True`` (the default) returns an
         edge data view object listing each edge with all of its attributes:

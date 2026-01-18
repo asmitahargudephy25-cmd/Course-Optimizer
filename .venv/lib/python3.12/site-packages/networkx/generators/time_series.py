@@ -1,7 +1,6 @@
 """
 Time Series Graphs
 """
-
 import itertools
 
 import networkx as nx
@@ -9,7 +8,7 @@ import networkx as nx
 __all__ = ["visibility_graph"]
 
 
-@nx._dispatchable(graphs=None, returns_graph=True)
+@nx._dispatch(graphs=None)
 def visibility_graph(series):
     """
     Return a Visibility Graph of an input Time Series.
