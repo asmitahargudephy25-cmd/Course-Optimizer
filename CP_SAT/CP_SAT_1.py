@@ -1,6 +1,6 @@
 import pandas as pd
 import time
-df = pd.read_csv("course_catalog.csv")
+df = pd.read_csv("data/course_catalog.csv")
 courses_list = df["course_name"].to_list()
 semesters_list = [1,2,3,4,5,6,7,8]
 difficulty = df.set_index("course_name")["difficulty"].astype(int).to_dict()
@@ -37,7 +37,7 @@ for s in extra_semesters:
     model.Add(sum(x[(c, s)] for c in courses_list) >= 4)
 
 #Hard Constraint 2(required courses for a particular major must be taken exactly once)
-df2 = pd.read_csv("major_requirements.csv")
+df2 = pd.read_csv("data/major_requirements.csv")
 majors_list = df2["major"].to_list()
 for index,value in enumerate(majors_list):
     print(index +1,value)
@@ -115,7 +115,7 @@ for a, b in product(courses_list, repeat=2):
                         model.Add(x[(a, s)] + x[(b, s)] <= 1)
 
 #Hard Constraint 6(Electives)
-eldf = pd.read_csv("electives_catalog.csv")
+eldf = pd.read_csv("data/electives_catalog.csv")
 
 for s in range(5,9):
     model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) <= 1)
@@ -367,7 +367,6 @@ if perf or ext:
                             robust_model.Add(x[(a, s)] + x[(b, s)] <= 1)
 
     #Hard Constraint 6(Electives)
-    eldf = pd.read_csv("electives_catalog.csv")
 
     for s in range(5,9):
         robust_model.Add(sum(x[(c,s)] for c in eldf["open_electives"].to_list()) <= 1)
@@ -570,6 +569,3 @@ else:
             if sem == s and solver.Value(v) == 1]
         if courses:
             print(f"Semester {s}: {courses}")
-
-
-

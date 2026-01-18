@@ -1,7 +1,7 @@
 import pandas as pd
 import networkx as nx 
 from ortools.sat.python import cp_model 
-from graph_builder import graph
+from  graph_builder import graph
 import time
 
 courses_list = list(graph.g.nodes)

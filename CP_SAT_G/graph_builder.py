@@ -60,7 +60,7 @@ class CourseGraphBuilder:
         self.g.graph["max_credits"] = max_credits
         self.g.graph["min_credits"] = min_credits
 
-df = pd.read_csv("course_catalog.csv")
+df = pd.read_csv("data/course_catalog.csv")
 graph = CourseGraphBuilder()
 
 for index, row in df.iterrows():
@@ -88,13 +88,13 @@ for index,row in df.iterrows():
             graph.AddCorequisite(row["course_name"], co)
 
 
-df2 = pd.read_csv("major_requirements.csv")
+df2 = pd.read_csv("data/major_requirements.csv")
 graph.g.graph["majors"]= {}
 graph.g.graph["majors"]["required"] = {}
 for index,row in df2.iterrows():
     graph.g.graph["majors"]["required"][row["major"]] = str(row["required_courses"]).split("_")
 
-df3 = pd.read_csv("electives_catalog.csv")
+df3 = pd.read_csv("data/electives_catalog.csv")
 graph.g.graph["open_electives"] = df3["open_electives"].to_list()
 graph.g.graph["majors"]["electives"] = {}
 for col_name,col_data in df3.items():
