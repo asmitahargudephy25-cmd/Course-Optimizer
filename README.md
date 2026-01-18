@@ -1,7 +1,7 @@
 # Course-Optimizer
 OVERVIEW-
 
-(6 CP-SAT solvers for optimized course scheduling)
+Six CP-SAT solvers for optimized course scheduling
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/) 
 [![OR-Tools](https://img.shields.io/badge/OR--Tools-CP--SAT-orange)](https://developers.google.com/optimization) 
@@ -120,4 +120,4 @@ CONTACT-
 Author : Asmita Hargude 
          Engineering Physics '25 IITBHU
 email : asmita.hargude.phy25@itbhu.ac.in
-linkedin : 
+linkedin : http://linkedin.com/in/asmita-hargude-3b1a55377
